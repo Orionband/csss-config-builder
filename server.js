@@ -40,5 +40,6 @@ app.post('/api/decrypt', upload.single('file'), (req, res) => {
     }
 });
 
-const PORT = 4000;
+const PORT = 10000;
 app.listen(PORT, () => console.log(`🛠️  Config Builder running at http://localhost:${PORT}`));
+
