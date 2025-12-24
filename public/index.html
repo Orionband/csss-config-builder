@@ -1,0 +1,126 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSSS Config Builder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HELP MODAL -->
+<div id="helpModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="toggleHelp()">×</span>
+        <h2>How to use the nuilder</h2>
+        
+        <h3>1. Import Packet Tracer Activity</h3>
+        <p>Upload the packet tracer activity. This <b>must</b> contain the answer network.</p>
+        
+        <h3>2. Build Configuration</h3>
+        <ul>
+            <li><b>Browse:</b> Use the tree on the left to explore devices, IOS configs, and hardware attributes.</li>
+            <li><b>Search:</b> Type in the search bar to find specific things.</li>
+            <li><b>Add Checks:</b> Click the <span style="color:var(--accent)">+ Add</span> button next to any item to create a grading check.</li>
+            <li><b>Edit:</b> Adjust points and messages in the right panel.</li>
+        </ul>
+
+        <h3>3. Export</h3>
+        <p>Click <b>Copy Config</b> and paste the result into your server's <code>lab.conf</code> file.</p>
+
+        <div class="warning-box">
+            <span class="warning-title">To prevent cheating</span>
+            <ol>
+                <li>Open activity wizard and then answer network.</li>
+                <li>Import the starting or blank network</li>
+                <li>Save the file</li>
+                <li>Ensure there are also no other checks, if so, remove them.</li>
+            </ol>
+        </div>
+        
+        <div style="text-align:center; margin-top:20px;">
+            <button class="btn" onclick="toggleHelp()">Ok!</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <div style="display:flex; align-items:center; gap:15px;">
+        <h1>CSSS Builder</h1>
+        <div id="sourceBadge" class="badge">No File Loaded</div>
+        <button class="btn btn-outline" onclick="toggleHelp()" style="padding:2px 8px; border-radius:50%; width:24px; height:24px; justify-content:center;">?</button>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <div class="upload-zone btn">
+            📂 Open .pka
+            <input type="file" id="fileInput" accept=".pka,.pkt">
+        </div>
+        <button class="btn btn-outline" id="dlBtn" disabled onclick="downloadXML()">⬇ XML</button>
+        <button class="btn" onclick="copyToClipboard()">📋 Copy Config</button>
+    </div>
+</header>
+
+<div class="container" id="mainContainer">
+    <!-- LEFT PANE -->
+    <div class="pane left" id="leftPane">
+        <div class="tabs">
+            <div class="tab active" onclick="setTab('tree')" id="tab-tree">Tree View</div>
+            <div class="tab" onclick="setTab('raw')" id="tab-raw">Raw XML</div>
+        </div>
+        
+        <div class="pane-toolbar" id="treeToolbar">
+            <div class="search-wrapper">
+                <input type="text" class="search-bar" id="searchBox" placeholder="Search..." onkeyup="filterTree()">
+                <span class="search-clear" id="searchClear" onclick="clearSearch()">×</span>
+            </div>
+            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(true)">Expand</button>
+            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(false)">Collapse</button>
+        </div>
+
+        <div class="scroll-area" id="view-tree">
+            <div style="text-align:center; padding:40px; color:#666;" id="loadingText">
+                Upload a PKA file to begin.
+            </div>
+            <div id="treeRoot"></div>
+        </div>
+
+        <div class="scroll-area" id="view-raw" style="display:none; background:#111;">
+            <div id="rawContent" class="raw-content"></div>
+            <div class="floating-back" id="rawBackBtn" onclick="setTab('tree')">⬅ Back to Tree</div>
+        </div>
+    </div>
+
+    <div class="resizer" id="resizerH"></div>
+
+    <!-- RIGHT PANE -->
+    <div class="pane right">
+        <div class="settings-card">
+            <div class="settings-grid">
+                <div><label class="field-label">Title</label><input class="field-input" id="confTitle" value="CSSS Lab" oninput="gen()"></div>
+                <div><label class="field-label">Max Subs (0=Inf)</label><input type="number" class="field-input" id="confMaxSub" value="0" oninput="gen()"></div>
+                <div><label class="field-label">Rate Limit (Cnt)</label><input type="number" class="field-input" id="confRateCount" value="5" oninput="gen()"></div>
+                <div><label class="field-label">Win (Sec)</label><input type="number" class="field-input" id="confRateWin" value="60" oninput="gen()"></div>
+            </div>
+            <div class="settings-row">
+                <label style="font-size:0.8rem"><input type="checkbox" id="confShowMsg" checked onchange="gen()"> Msgs</label>
+                <label style="font-size:0.8rem"><input type="checkbox" id="confShowScore" checked onchange="gen()"> Score</label>
+                <label style="font-size:0.8rem"><input type="checkbox" id="confRetainPka" checked onchange="gen()"> Save PKA</label>
+                <label style="font-size:0.8rem"><input type="checkbox" id="confRetainXml" onchange="gen()"> Save XML</label>
+            </div>
+        </div>
+
+        <div class="pane-toolbar">
+            <span style="font-size:0.8rem; font-weight:bold; color:#888;">CHECKS (<span id="checkCount">0</span>)</span>
+        </div>
+        
+        <div class="scroll-area" id="checksList"></div>
+        <div class="resizer-v" id="resizerV"></div>
+        <div class="output-container" id="outputPane">
+            <textarea class="output" id="tomlOutput" readonly></textarea>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
