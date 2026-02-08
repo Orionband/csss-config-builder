@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSSS Config Builder</title>
+    <title>CSSS Suite Builder</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -12,34 +12,41 @@
 <div id="helpModal" class="modal">
     <div class="modal-content">
         <span class="modal-close" onclick="toggleHelp()">×</span>
-        <h2>How to use the nuilder</h2>
+        <h2>CSSS Builder Documentation</h2>
         
-        <h3>1. Import Packet Tracer Activity</h3>
-        <p>Upload the packet tracer activity. This <b>must</b> contain the answer network.</p>
-        
-        <h3>2. Build Configuration</h3>
+        <h3>1. Lab Workflow</h3>
         <ul>
-            <li><b>Browse:</b> Use the tree on the left to explore devices, IOS configs, and hardware attributes.</li>
-            <li><b>Search:</b> Type in the search bar to find specific things.</li>
-            <li><b>Add Checks:</b> Click the <span style="color:var(--accent)">+ Add</span> button next to any item to create a grading check.</li>
-            <li><b>Edit:</b> Adjust points and messages in the right panel.</li>
+            <li>Import the Packet Tracer file (.pka). <b>Must contain the Answer Network.</b></li>
+            <li>Use the Tree View to find configurations.</li>
+            <li>Click <span style="color:var(--accent)">+ Add</span> to create a grading check.</li>
         </ul>
 
-        <h3>3. Export</h3>
-        <p>Click <b>Copy Config</b> and paste the result into your server's <code>lab.conf</code> file.</p>
+        <h3>2. Check Types</h3>
+        <p>Use the dropdown in the check card to select logic. "Not" versions invert the check (Fail if found).</p>
+        <ul>
+            <li><b>ConfigMatch / Not:</b> Exact string match (e.g., <code>hostname R1</code>).</li>
+            <li><b>ConfigRegex / Not:</b> Pattern match (e.g., <code>^enable secret 5 .*</code>).</li>
+            <li><b>XmlMatch / Not:</b> Hardware attributes (e.g., <code>Model</code>).</li>
+            <li><b>XmlRegex / Not:</b> Pattern match for XML values.</li>
+        </ul>
+
+        <h3>3. Quiz Workflow</h3>
+        <ul>
+            <li>Create quizzes in the Quiz Builder tab.</li>
+            <li><b>Text Questions:</b> Support Regex logic.</li>
+            <li><b>Radio:</b> Single choice only.</li>
+        </ul>
+
+        <h3>4. Export</h3>
+        <p>Copy the text from the bottom output panel into your <code>lab.conf</code> or <code>quiz.conf</code>.</p>
 
         <div class="warning-box">
-            <span class="warning-title">To prevent cheating</span>
-            <ol>
-                <li>Open activity wizard and then answer network.</li>
-                <li>Import the starting or blank network</li>
-                <li>Save the file</li>
-                <li>Ensure there are also no other checks, if so, remove them.</li>
-            </ol>
+            <span class="warning-title">Anti-Cheat</span>
+            <p>Ensure you delete the answer network from the PKA file before giving it to students.</p>
         </div>
         
         <div style="text-align:center; margin-top:20px;">
-            <button class="btn" onclick="toggleHelp()">Ok!</button>
+            <button class="btn" onclick="toggleHelp()">Close</button>
         </div>
     </div>
 </div>
@@ -47,76 +54,179 @@
 <header>
     <div style="display:flex; align-items:center; gap:15px;">
         <h1>CSSS Builder</h1>
-        <div id="sourceBadge" class="badge">No File Loaded</div>
+        <div class="mode-switcher">
+            <button class="btn btn-outline active" id="modeLabBtn" onclick="switchMode('lab')">Lab Builder</button>
+            <button class="btn btn-outline" id="modeQuizBtn" onclick="switchMode('quiz')">Quiz Builder</button>
+        </div>
         <button class="btn btn-outline" onclick="toggleHelp()" style="padding:2px 8px; border-radius:50%; width:24px; height:24px; justify-content:center;">?</button>
     </div>
-    <div style="display:flex; gap:10px; align-items:center;">
+    
+    <div id="headerLabControls" style="display:flex; gap:10px; align-items:center;">
+        <div id="sourceBadge" class="badge">No PKA Loaded</div>
         <div class="upload-zone btn">
             📂 Open .pka
             <input type="file" id="fileInput" accept=".pka,.pkt">
         </div>
         <button class="btn btn-outline" id="dlBtn" disabled onclick="downloadXML()">⬇ XML</button>
-        <button class="btn" onclick="copyToClipboard()">📋 Copy Config</button>
+    </div>
+
+    <div id="headerQuizControls" style="display:none; gap:10px; align-items:center;">
+        <span class="badge" style="background:var(--accent); color:black;">Quiz Mode</span>
     </div>
 </header>
 
-<div class="container" id="mainContainer">
-    <!-- LEFT PANE -->
-    <div class="pane left" id="leftPane">
-        <div class="tabs">
-            <div class="tab active" onclick="setTab('tree')" id="tab-tree">Tree View</div>
-            <div class="tab" onclick="setTab('raw')" id="tab-raw">Raw XML</div>
-        </div>
-        
-        <div class="pane-toolbar" id="treeToolbar">
-            <div class="search-wrapper">
-                <input type="text" class="search-bar" id="searchBox" placeholder="Search..." onkeyup="filterTree()">
-                <span class="search-clear" id="searchClear" onclick="clearSearch()">×</span>
+<div class="container">
+    
+    <!-- ================= LAB SECTION ================= -->
+    <div id="labSection" class="section-wrapper" style="display:flex; flex:1; width:100%; overflow:hidden;">
+        <!-- LEFT PANE -->
+        <div class="pane left" id="leftPane">
+            <div class="tabs">
+                <div class="tab active" onclick="setTab('tree')" id="tab-tree">Tree View</div>
+                <div class="tab" onclick="setTab('raw')" id="tab-raw">Raw XML</div>
             </div>
-            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(true)">Expand</button>
-            <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(false)">Collapse</button>
+            
+            <div class="pane-toolbar" id="treeToolbar">
+                <div class="search-wrapper">
+                    <input type="text" class="search-bar" id="searchBox" placeholder="Search config..." onkeyup="filterTree()">
+                    <span class="search-clear" id="searchClear" onclick="clearSearch()">×</span>
+                </div>
+                <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(true)">Expand</button>
+                <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(false)">Collapse</button>
+            </div>
+
+            <div class="scroll-area" id="view-tree">
+                <div style="text-align:center; padding:40px; color:#666;" id="loadingText">
+                    Upload a PKA file to begin.
+                </div>
+                <div id="treeRoot"></div>
+            </div>
+
+            <!-- RAW VIEW WITH LINE NUMBERS -->
+            <div class="scroll-area" id="view-raw" style="display:none; background:#111; padding:0;">
+                <div class="code-wrapper">
+                    <div id="lineNumbers" class="line-numbers"></div>
+                    <div id="rawContent" class="raw-content"></div>
+                </div>
+                <div class="floating-back" id="rawBackBtn" onclick="setTab('tree')">⬅ Back to Tree</div>
+            </div>
         </div>
 
-        <div class="scroll-area" id="view-tree">
-            <div style="text-align:center; padding:40px; color:#666;" id="loadingText">
-                Upload a PKA file to begin.
-            </div>
-            <div id="treeRoot"></div>
-        </div>
+        <div class="resizer" id="resizerH"></div>
 
-        <div class="scroll-area" id="view-raw" style="display:none; background:#111;">
-            <div id="rawContent" class="raw-content"></div>
-            <div class="floating-back" id="rawBackBtn" onclick="setTab('tree')">⬅ Back to Tree</div>
+        <!-- RIGHT PANE -->
+        <div class="pane right">
+            
+            <div class="settings-card compact" style="border-bottom: 2px solid var(--accent);">
+                <div class="settings-header-compact">Global Options</div>
+                <div class="settings-grid compact-grid">
+                    <div><label class="field-label">Max Subs</label><input type="number" class="field-input" id="confMaxSub" value="0" oninput="updateGlobal()"></div>
+                    <div><label class="field-label">Rate (Cnt)</label><input type="number" class="field-input" id="confRateCount" value="5" oninput="updateGlobal()"></div>
+                    <div><label class="field-label">Win (Sec)</label><input type="number" class="field-input" id="confRateWin" value="60" oninput="updateGlobal()"></div>
+                    <div><label class="field-label">Leaderboard</label>
+                        <select class="field-input" id="confLeaderboard" onchange="updateGlobal()">
+                            <option value="true">Enabled</option>
+                            <option value="false">Disabled</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-row" style="margin-top:2px;">
+                    <label class="custom-label"><input type="checkbox" id="confRetainPka" checked onchange="updateGlobal()"><span class="checkmark"></span> Save PKA</label>
+                    <label class="custom-label"><input type="checkbox" id="confRetainXml" onchange="updateGlobal()"><span class="checkmark"></span> Save XML</label>
+                </div>
+            </div>
+
+            <div class="settings-card compact">
+                <div style="margin-bottom: 8px;">
+                    <label class="field-label" style="color:var(--accent); font-weight:bold;">SELECT ACTIVE LAB</label>
+                    <select id="labSelector" class="field-input" style="width:100%; padding:5px; font-size:0.9rem; background:#222; border:1px solid #555;" onchange="selectLab(this.value)"></select>
+                </div>
+
+                <div class="settings-grid compact-grid">
+                    <div><label class="field-label">Lab ID (slug)</label><input class="field-input" id="labId" oninput="updateLabMeta()"></div>
+                    <div><label class="field-label">Lab Title</label><input class="field-input" id="labTitle" oninput="updateLabMeta()"></div>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; padding-top:5px; border-top:1px solid #333;">
+                    <div class="settings-row">
+                        <label class="custom-label"><input type="checkbox" id="labShowMsg" onchange="updateLabMeta()"><span class="checkmark"></span> Show Msgs</label>
+                        <label class="custom-label"><input type="checkbox" id="labShowScore" onchange="updateLabMeta()"><span class="checkmark"></span> Show Score</label>
+                    </div>
+                    <div>
+                         <button class="mini-btn" onclick="addLab()">+ Add Lab</button>
+                         <button class="mini-btn" style="color:#f66" onclick="removeLab()">Delete</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pane-toolbar">
+                <span style="font-size:0.8rem; font-weight:bold; color:#888;">CHECKS (<span id="checkCount">0</span>)</span>
+                <button class="mini-btn" style="margin-left:auto" onclick="addManualCheck()">+ Manual Check</button>
+            </div>
+            
+            <div class="scroll-area" id="checksList"></div>
+            <div class="resizer-v" id="resizerV"></div>
+            
+            <div class="output-container" id="outputPane">
+                <div class="pane-toolbar" style="min-height:30px; padding:2px 10px; justify-content:space-between;">
+                    <span style="font-size:0.7rem; color:#aaa;">OUTPUT: lab.conf</span>
+                    <button class="mini-btn" onclick="copyToClipboard('lab')">Copy</button>
+                </div>
+                <textarea class="output" id="labOutput" readonly></textarea>
+            </div>
         </div>
     </div>
 
-    <div class="resizer" id="resizerH"></div>
-
-    <!-- RIGHT PANE -->
-    <div class="pane right">
-        <div class="settings-card">
-            <div class="settings-grid">
-                <div><label class="field-label">Title</label><input class="field-input" id="confTitle" value="CSSS Lab" oninput="gen()"></div>
-                <div><label class="field-label">Max Subs (0=Inf)</label><input type="number" class="field-input" id="confMaxSub" value="0" oninput="gen()"></div>
-                <div><label class="field-label">Rate Limit (Cnt)</label><input type="number" class="field-input" id="confRateCount" value="5" oninput="gen()"></div>
-                <div><label class="field-label">Win (Sec)</label><input type="number" class="field-input" id="confRateWin" value="60" oninput="gen()"></div>
+    <!-- ================= QUIZ SECTION ================= -->
+    <div id="quizSection" class="section-wrapper" style="display:none; flex:1; width:100%; overflow:hidden;">
+        <!-- LEFT PANE -->
+        <div class="pane left" style="width:30%; min-width:250px;">
+            <div class="pane-toolbar">
+                <span style="font-weight:bold; color:var(--accent);">Quizzes</span>
+                <button class="mini-btn" style="margin-left:auto" onclick="addQuiz()">+ Create</button>
             </div>
-            <div class="settings-row">
-                <label style="font-size:0.8rem"><input type="checkbox" id="confShowMsg" checked onchange="gen()"> Msgs</label>
-                <label style="font-size:0.8rem"><input type="checkbox" id="confShowScore" checked onchange="gen()"> Score</label>
-                <label style="font-size:0.8rem"><input type="checkbox" id="confRetainPka" checked onchange="gen()"> Save PKA</label>
-                <label style="font-size:0.8rem"><input type="checkbox" id="confRetainXml" onchange="gen()"> Save XML</label>
-            </div>
+            <div class="scroll-area" id="quizList"></div>
         </div>
 
-        <div class="pane-toolbar">
-            <span style="font-size:0.8rem; font-weight:bold; color:#888;">CHECKS (<span id="checkCount">0</span>)</span>
-        </div>
-        
-        <div class="scroll-area" id="checksList"></div>
-        <div class="resizer-v" id="resizerV"></div>
-        <div class="output-container" id="outputPane">
-            <textarea class="output" id="tomlOutput" readonly></textarea>
+        <!-- RIGHT PANE -->
+        <div class="pane right" style="flex:1;">
+            <div id="quizEditor" style="display:none; flex-direction:column; height:100%;">
+                
+                <div class="settings-card">
+                    <div class="settings-grid">
+                        <div><label class="field-label">ID</label><input class="field-input" id="qId" oninput="updateQuizMeta()"></div>
+                        <div><label class="field-label">Title</label><input class="field-input" id="qTitle" oninput="updateQuizMeta()"></div>
+                        <div><label class="field-label">Time (Mins)</label><input type="number" class="field-input" id="qTime" oninput="updateQuizMeta()"></div>
+                        <div><label class="field-label">Attempts</label><input type="number" class="field-input" id="qAtt" oninput="updateQuizMeta()"></div>
+                    </div>
+                    <div class="settings-row" style="margin-top:8px;">
+                         <label class="custom-label"><input type="checkbox" id="qEnabled" onchange="updateQuizMeta()"><span class="checkmark"></span> Enabled</label>
+                         <label class="custom-label"><input type="checkbox" id="qScore" onchange="updateQuizMeta()"><span class="checkmark"></span> Score</label>
+                         <label class="custom-label"><input type="checkbox" id="qCorrect" onchange="updateQuizMeta()"><span class="checkmark"></span> Corrections</label>
+                         <button class="mini-btn" style="margin-left:auto; color:#f66;" onclick="deleteQuiz()">Delete</button>
+                    </div>
+                </div>
+
+                <div class="pane-toolbar">
+                    <span style="font-size:0.8rem; font-weight:bold; color:#888;">QUESTIONS (<span id="qCount">0</span>)</span>
+                    <button class="mini-btn" style="margin-left:auto" onclick="addQuestion()">+ Add Question</button>
+                </div>
+
+                <div class="scroll-area" id="questionListContainer" style="background:#1a1a1a;"></div>
+                <div class="resizer-v" id="resizerV2"></div>
+
+                <div class="output-container" id="quizOutputPane">
+                     <div class="pane-toolbar" style="min-height:30px; padding:2px 10px; justify-content:space-between;">
+                        <span style="font-size:0.7rem; color:#aaa;">OUTPUT: quiz.conf</span>
+                        <button class="mini-btn" onclick="copyToClipboard('quiz')">Copy</button>
+                    </div>
+                    <textarea class="output" id="quizOutput" readonly></textarea>
+                </div>
+            </div>
+            
+            <div id="quizEmptyState" style="text-align:center; padding:50px; color:#666;">
+                Select or Create a Quiz.
+            </div>
         </div>
     </div>
 </div>

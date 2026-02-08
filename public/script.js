@@ -1,20 +1,69 @@
-﻿let checks = [];
+﻿// ================= DATA STATE =================
 let fullXmlText = "";
+let currentMode = 'lab';
 
-// --- MODAL ---
+let globalOpts = {
+    max_submissions: 0,
+    rate_limit_count: 5,
+    rate_limit_window: 60,
+    retain_pka: true,
+    retain_xml: false,
+    show_leaderboard: true
+};
+
+let labs = [{
+    id: "lab1",
+    title: "Lab 1",
+    show_score: true,
+    show_msg: true,
+    checks: []
+}];
+let currentLabIdx = 0;
+
+let quizzes = [];
+let currentQuizIdx = -1;
+
+// ================= INIT & UTILS =================
+window.onload = () => {
+    toggleHelp();
+    renderLabSelector();
+    renderChecks();
+    
+    // Bind Globals
+    document.getElementById('confMaxSub').value = globalOpts.max_submissions;
+    document.getElementById('confRateCount').value = globalOpts.rate_limit_count;
+    document.getElementById('confRateWin').value = globalOpts.rate_limit_window;
+    document.getElementById('confLeaderboard').value = globalOpts.show_leaderboard.toString();
+    document.getElementById('confRetainPka').checked = globalOpts.retain_pka;
+    document.getElementById('confRetainXml').checked = globalOpts.retain_xml;
+    
+    setupResizer('resizerH', 'leftPane', 'horizontal');
+    setupResizer('resizerV', 'outputPane', 'vertical');
+    setupResizer('resizerV2', 'quizOutputPane', 'vertical');
+};
+
+function switchMode(mode) {
+    currentMode = mode;
+    document.getElementById('modeLabBtn').className = mode === 'lab' ? 'btn btn-outline active' : 'btn btn-outline';
+    document.getElementById('modeQuizBtn').className = mode === 'quiz' ? 'btn btn-outline active' : 'btn btn-outline';
+    
+    document.getElementById('labSection').style.display = mode === 'lab' ? 'flex' : 'none';
+    document.getElementById('quizSection').style.display = mode === 'quiz' ? 'flex' : 'none';
+    
+    document.getElementById('headerLabControls').style.display = mode === 'lab' ? 'flex' : 'none';
+    document.getElementById('headerQuizControls').style.display = mode === 'quiz' ? 'flex' : 'none';
+}
+
 function toggleHelp() {
     const m = document.getElementById('helpModal');
     m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
 }
-window.onload = () => toggleHelp();
-
-// --- RESIZERS ---
-setupResizer('resizerH', 'leftPane', 'horizontal');
-setupResizer('resizerV', 'outputPane', 'vertical');
 
 function setupResizer(resizerId, targetId, direction) {
     const resizer = document.getElementById(resizerId);
     const target = document.getElementById(targetId);
+    if(!resizer || !target) return;
+    
     let isResizing = false;
     resizer.addEventListener('mousedown', (e) => {
         isResizing = true;
@@ -28,22 +77,429 @@ function setupResizer(resizerId, targetId, direction) {
             const w = e.clientX;
             if(w > 200 && w < window.innerWidth - 200) target.style.width = `${w}px`;
         } else {
-            const containerH = document.querySelector('.pane.right').clientHeight;
-            const topOffset = document.querySelector('.pane.right').getBoundingClientRect().top;
-            const h = containerH - (e.clientY - topOffset);
-            if(h > 50 && h < containerH - 150) target.style.height = `${h}px`;
+            const rect = target.getBoundingClientRect();
+            target.style.height = `${e.clientY - rect.top}px`;
         }
     });
     document.addEventListener('mouseup', () => {
-        if(isResizing) {
-            isResizing = false;
-            document.body.style.cursor = 'default';
-            resizer.classList.remove('active');
-        }
+        isResizing = false;
+        document.body.style.cursor = 'default';
+        resizer.classList.remove('active');
     });
 }
 
-// --- TABS ---
+function copyToClipboard(type) {
+    const id = type === 'lab' ? 'labOutput' : 'quizOutput';
+    const copyText = document.getElementById(id);
+    copyText.select();
+    document.execCommand("copy");
+    alert("Copied config!");
+}
+
+function updateGlobal() {
+    globalOpts.max_submissions = parseInt(document.getElementById('confMaxSub').value);
+    globalOpts.rate_limit_count = parseInt(document.getElementById('confRateCount').value);
+    globalOpts.rate_limit_window = parseInt(document.getElementById('confRateWin').value);
+    globalOpts.retain_pka = document.getElementById('confRetainPka').checked;
+    globalOpts.retain_xml = document.getElementById('confRetainXml').checked;
+    globalOpts.show_leaderboard = (document.getElementById('confLeaderboard').value === 'true');
+    genLab();
+}
+
+// ================= LAB LOGIC =================
+function renderLabSelector() {
+    const sel = document.getElementById('labSelector');
+    sel.innerHTML = '';
+    labs.forEach((l, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.innerText = l.title;
+        if(i === currentLabIdx) opt.selected = true;
+        sel.appendChild(opt);
+    });
+    loadLabToUI();
+    genLab();
+}
+
+function loadLabToUI() {
+    const l = labs[currentLabIdx];
+    document.getElementById('labId').value = l.id;
+    document.getElementById('labTitle').value = l.title;
+    document.getElementById('labShowMsg').checked = l.show_msg;
+    document.getElementById('labShowScore').checked = l.show_score;
+    renderChecks();
+}
+
+function selectLab(idx) {
+    currentLabIdx = parseInt(idx);
+    loadLabToUI();
+}
+
+function addLab() {
+    const newIdx = labs.length;
+    labs.push({ id: `lab${newIdx + 1}`, title: `Lab ${newIdx + 1}`, show_score: true, show_msg: true, checks: [] });
+    currentLabIdx = newIdx;
+    renderLabSelector();
+}
+
+function removeLab() {
+    if(labs.length <= 1) return alert("Must have at least one lab.");
+    if(!confirm("Delete current lab definition?")) return;
+    labs.splice(currentLabIdx, 1);
+    currentLabIdx = 0;
+    renderLabSelector();
+}
+
+function updateLabMeta() {
+    const l = labs[currentLabIdx];
+    l.id = document.getElementById('labId').value;
+    l.title = document.getElementById('labTitle').value;
+    l.show_msg = document.getElementById('labShowMsg').checked;
+    l.show_score = document.getElementById('labShowScore').checked;
+    const sel = document.getElementById('labSelector');
+    if(sel.options[currentLabIdx]) sel.options[currentLabIdx].text = l.title;
+    genLab();
+}
+
+function addCheck(data) {
+    labs[currentLabIdx].checks.push({ ...data, message: `Check ${data.value}`, points: 10, source: 'running' });
+    renderChecks();
+}
+
+function addManualCheck() {
+    labs[currentLabIdx].checks.push({
+        device: "DeviceName",
+        type: "ConfigMatch",
+        message: "New Check",
+        points: 5,
+        value: "command",
+        source: "running",
+        context: "global"
+    });
+    renderChecks();
+}
+
+function renderChecks() {
+    const list = document.getElementById('checksList');
+    list.innerHTML = '';
+    const currentChecks = labs[currentLabIdx].checks;
+    document.getElementById('checkCount').innerText = currentChecks.length;
+
+    currentChecks.forEach((c, i) => {
+        const div = document.createElement('div');
+        div.className = 'check-card';
+        const isXml = c.type.startsWith('Xml');
+        const typeColor = isXml ? '#66d9ef' : '#a6e22e';
+
+        const types = [
+            "ConfigMatch", "ConfigMatchNot", 
+            "ConfigRegex", "ConfigRegexNot",
+            "XmlMatch", "XmlMatchNot", 
+            "XmlRegex", "XmlRegexNot"
+        ];
+        
+        let typeOpts = types.map(t => `<option value="${t}" ${c.type===t?'selected':''}>${t}</option>`).join('');
+        let typeSelect = `<select class="field-input" style="width:auto; padding:1px;" onchange="updateCheck(${i}, 'type', this.value)">${typeOpts}</select>`;
+
+        const isSourceVisible = !isXml;
+
+        div.innerHTML = `
+            <div class="check-header">
+                <input class="field-input" style="width:120px; font-weight:bold; color:${typeColor}" value="${c.device}" oninput="updateCheck(${i}, 'device', this.value)">
+                ${typeSelect}
+                <span class="remove-x" onclick="removeCheck(${i})">×</span>
+            </div>
+            <div class="settings-grid">
+                <div><label class="field-label">Message</label><input class="field-input" value="${c.message}" oninput="updateCheck(${i}, 'message', this.value)"></div>
+                <div><label class="field-label">Points</label><input type="number" class="field-input" value="${c.points}" oninput="updateCheck(${i}, 'points', this.value)"></div>
+            </div>
+            
+            ${isSourceVisible ? `
+            <div class="settings-grid">
+                <div><label class="field-label">Source</label>
+                    <select class="field-input" onchange="updateCheck(${i}, 'source', this.value)">
+                        <option value="running" ${c.source==='running'?'selected':''}>running</option>
+                        <option value="startup" ${c.source==='startup'?'selected':''}>startup</option>
+                    </select>
+                </div>
+                <div><label class="field-label">Context</label><input class="field-input" value="${c.context || 'global'}" oninput="updateCheck(${i}, 'context', this.value)"></div>
+            </div>` : ''}
+
+            <div><label class="field-label">Value</label><input class="field-input" value="${c.value.replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'value', this.value)"></div>
+        `;
+        list.appendChild(div);
+    });
+    genLab();
+}
+
+function updateCheck(idx, key, val) {
+    labs[currentLabIdx].checks[idx][key] = val;
+    // Rerender if type changed to toggle Source/Context visibility
+    if(key === 'type') renderChecks(); 
+    else genLab();
+}
+function removeCheck(idx) {
+    labs[currentLabIdx].checks.splice(idx, 1);
+    renderChecks();
+}
+
+function genLab() {
+    let out = `[options]\n`;
+    out += `max_submissions = ${globalOpts.max_submissions}\n`;
+    out += `rate_limit_count = ${globalOpts.rate_limit_count}\n`;
+    out += `rate_limit_window_seconds = ${globalOpts.rate_limit_window}\n`;
+    out += `retain_pka = ${globalOpts.retain_pka}\n`;
+    out += `retain_xml = ${globalOpts.retain_xml}\n`;
+    out += `show_leaderboard = ${globalOpts.show_leaderboard}\n\n`;
+    
+    labs.forEach(l => {
+        out += `[[labs]]\nid = "${l.id}"\ntitle = "${l.title}"\nshow_score = ${l.show_score}\nshow_check_messages = ${l.show_msg}\n\n`;
+        l.checks.forEach(c => {
+            out += `    [[labs.checks]]\n    message = "${c.message}"\n    points = ${c.points}\n    device = "${c.device}"\n`;
+            out += `        [[labs.checks.pass]]\n        type = "${c.type}"\n`;
+            if(c.type.startsWith('Xml')) {
+                const pathArr = c.path ? JSON.parse(c.path).map(s => `"${s}"`).join(', ') : '';
+                out += `        path = [${pathArr}]\n        value = "${c.value}"\n\n`;
+            } else {
+                out += `        source = "${c.source}"\n        context = "${c.context}"\n        value = "${c.value.replace(/"/g, '\\"')}"\n\n`;
+            }
+        });
+        out += "\n";
+    });
+    document.getElementById('labOutput').value = out;
+}
+
+// ================= QUIZ LOGIC =================
+function addQuiz() {
+    const newIdx = quizzes.length;
+    quizzes.push({ id: `quiz${newIdx + 1}`, title: `Quiz ${newIdx + 1}`, enabled: true, show_score: true, show_correct: true, time: 15, attempts: 3, questions: [] });
+    renderQuizList();
+    selectQuiz(newIdx);
+}
+
+function renderQuizList() {
+    const list = document.getElementById('quizList');
+    list.innerHTML = '';
+    quizzes.forEach((q, i) => {
+        const div = document.createElement('div');
+        div.className = `quiz-item-row ${i === currentQuizIdx ? 'selected' : ''}`;
+        div.innerHTML = `<span>${q.title}</span>`;
+        div.onclick = () => selectQuiz(i);
+        list.appendChild(div);
+    });
+}
+
+function selectQuiz(idx) {
+    currentQuizIdx = idx;
+    renderQuizList();
+    document.getElementById('quizEditor').style.display = 'flex';
+    document.getElementById('quizEmptyState').style.display = 'none';
+    loadQuizToUI();
+}
+
+function loadQuizToUI() {
+    const q = quizzes[currentQuizIdx];
+    document.getElementById('qId').value = q.id;
+    document.getElementById('qTitle').value = q.title;
+    document.getElementById('qTime').value = q.time;
+    document.getElementById('qAtt').value = q.attempts;
+    document.getElementById('qEnabled').checked = q.enabled;
+    document.getElementById('qScore').checked = q.show_score;
+    document.getElementById('qCorrect').checked = q.show_correct;
+    renderQuestions();
+    genQuiz();
+}
+
+function updateQuizMeta() {
+    const q = quizzes[currentQuizIdx];
+    q.id = document.getElementById('qId').value;
+    q.title = document.getElementById('qTitle').value;
+    q.time = parseInt(document.getElementById('qTime').value);
+    q.attempts = parseInt(document.getElementById('qAtt').value);
+    q.enabled = document.getElementById('qEnabled').checked;
+    q.show_score = document.getElementById('qScore').checked;
+    q.show_correct = document.getElementById('qCorrect').checked;
+    renderQuizList();
+    genQuiz();
+}
+
+function deleteQuiz() {
+    if(!confirm("Delete this quiz?")) return;
+    quizzes.splice(currentQuizIdx, 1);
+    currentQuizIdx = -1;
+    renderQuizList();
+    document.getElementById('quizEditor').style.display = 'none';
+    document.getElementById('quizEmptyState').style.display = 'block';
+    genQuiz();
+}
+
+function addQuestion() {
+    quizzes[currentQuizIdx].questions.push({ text: "New Question", type: "radio", explanation: "", answers: [{text:"Option 1", correct:true}, {text:"Option 2", correct:false}], pairs: [] });
+    renderQuestions();
+}
+
+function renderQuestions() {
+    const list = document.getElementById('questionListContainer');
+    list.innerHTML = '';
+    const qs = quizzes[currentQuizIdx].questions;
+    document.getElementById('qCount').innerText = qs.length;
+
+    qs.forEach((q, i) => {
+        const div = document.createElement('div');
+        div.className = 'q-card';
+        div.innerHTML = `
+            <div class="q-header"><span>Q${i+1}</span><span class="remove-x" onclick="removeQuestion(${i})">×</span></div>
+            <div class="settings-grid">
+                <div><label class="field-label">Question Text</label><input class="field-input" value="${q.text}" oninput="updateQ(${i}, 'text', this.value)"></div>
+                <div><label class="field-label">Type</label>
+                    <select class="field-input" onchange="updateQ(${i}, 'type', this.value)">
+                        <option value="radio" ${q.type=='radio'?'selected':''}>Radio (Single)</option>
+                        <option value="checkbox" ${q.type=='checkbox'?'selected':''}>Checkbox (Multi)</option>
+                        <option value="text" ${q.type=='text'?'selected':''}>Text (Regex)</option>
+                        <option value="matching" ${q.type=='matching'?'selected':''}>Matching</option>
+                    </select>
+                </div>
+            </div>
+            <div><label class="field-label">Explanation</label><input class="field-input" value="${q.explanation||''}" oninput="updateQ(${i}, 'explanation', this.value)"></div>
+            <div class="answer-list" id="q-answers-${i}"></div>
+        `;
+        list.appendChild(div);
+        renderAnswers(i, q);
+    });
+    genQuiz();
+}
+
+function updateQ(qIdx, key, val) {
+    quizzes[currentQuizIdx].questions[qIdx][key] = val;
+    if(key === 'type') {
+        const q = quizzes[currentQuizIdx].questions[qIdx];
+        if(val === 'matching') q.pairs = [{left:'A', right:'1'}];
+        else if(val === 'text') q.regex = "^answer$";
+        else { q.answers = [{text:"Option A", correct:true}]; }
+        renderQuestions();
+    } else { genQuiz(); }
+}
+
+function removeQuestion(i) { quizzes[currentQuizIdx].questions.splice(i, 1); renderQuestions(); }
+
+function renderAnswers(qIdx, q) {
+    const container = document.getElementById(`q-answers-${qIdx}`);
+    container.innerHTML = '';
+    
+    if (q.type === 'text') {
+        container.innerHTML = `<div><label class="field-label">Regex Match</label><input class="field-input" value="${q.regex||''}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].regex=this.value; genQuiz()"></div>`;
+        return;
+    }
+
+    if (q.type === 'matching') {
+        if(!q.pairs) q.pairs = [];
+        q.pairs.forEach((pair, pIdx) => {
+            const row = document.createElement('div');
+            row.className = 'answer-row';
+            row.style.background = 'transparent';
+            row.style.border = 'none';
+            row.innerHTML = `
+                <input class="field-input" placeholder="Left" value="${pair.left}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].left=this.value; genQuiz()" style="width:45%; margin-right:5px;">
+                <span>=</span>
+                <input class="field-input" placeholder="Right" value="${pair.right}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].right=this.value; genQuiz()" style="width:45%; margin-left:5px;">
+                <button class="mini-btn" style="color:#f66; margin-left:5px;" onclick="removePair(${qIdx}, ${pIdx})">×</button>
+            `;
+            container.appendChild(row);
+        });
+        const addBtn = document.createElement('button');
+        addBtn.className = 'mini-btn';
+        addBtn.innerText = "+ Add Pair";
+        addBtn.onclick = () => { q.pairs.push({left:'', right:''}); renderQuestions(); };
+        container.appendChild(addBtn);
+        return;
+    }
+
+    if(!q.answers) q.answers = [];
+    const isRadio = q.type === 'radio';
+    q.answers.forEach((ans, aIdx) => {
+        const row = document.createElement('div');
+        row.className = 'answer-row';
+        const checkHandler = isRadio ? `setRadioCorrect(${qIdx}, ${aIdx})` : `quizzes[currentQuizIdx].questions[${qIdx}].answers[${aIdx}].correct=this.checked; genQuiz()`;
+        row.innerHTML = `
+            <div class="answer-check-col"><label class="custom-label ${isRadio ? 'radio' : ''}"><input type="checkbox" ${ans.correct ? 'checked' : ''} onchange="${checkHandler}"><span class="checkmark"></span></label></div>
+            <div class="answer-text-col"><input type="text" value="${ans.text}" placeholder="Answer Option..." oninput="quizzes[currentQuizIdx].questions[${qIdx}].answers[${aIdx}].text=this.value; genQuiz()"></div>
+            <button class="mini-btn" style="color:#f66; border:none; background:transparent;" onclick="removeAns(${qIdx}, ${aIdx})">×</button>
+        `;
+        container.appendChild(row);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'mini-btn';
+    addBtn.innerText = "+ Add Option";
+    addBtn.style.marginTop = "5px";
+    addBtn.onclick = () => { q.answers.push({text:"", correct:false}); renderQuestions(); };
+    container.appendChild(addBtn);
+}
+
+function setRadioCorrect(qIdx, targetAIdx) {
+    const q = quizzes[currentQuizIdx].questions[qIdx];
+    q.answers.forEach((a, idx) => { a.correct = (idx === targetAIdx); });
+    renderQuestions(); 
+}
+
+function removeAns(qIdx, aIdx) { quizzes[currentQuizIdx].questions[qIdx].answers.splice(aIdx, 1); renderQuestions(); }
+function removePair(qIdx, pIdx) { quizzes[currentQuizIdx].questions[qIdx].pairs.splice(pIdx, 1); renderQuestions(); }
+
+function genQuiz() {
+    let out = "";
+    quizzes.forEach(q => {
+        out += `[[quizzes]]\nid = "${q.id}"\ntitle = "${q.title}"\nenabled = ${q.enabled}\n`;
+        out += `time_limit_minutes = ${q.time}\nmax_attempts = ${q.attempts}\nshow_score = ${q.show_score}\nshow_corrections = ${q.show_correct}\n\n`;
+        q.questions.forEach(qs => {
+            out += `    [[quizzes.questions]]\n    text = "${qs.text}"\n    type = "${qs.type}"\n    explanation = "${qs.explanation || ''}"\n`;
+            if(qs.type === 'text') { out += `    regex = "${(qs.regex||'').replace(/\\/g, '\\\\')}"\n`; }
+            else if (qs.type === 'matching') { if(qs.pairs) { qs.pairs.forEach(p => { out += `        [[quizzes.questions.pairs]]\n        left = "${p.left}"\n        right = "${p.right}"\n`; }); } }
+            else { if(qs.answers) { qs.answers.forEach(a => { out += `        [[quizzes.questions.answers]]\n        text = "${a.text}"\n        correct = ${a.correct}\n`; }); } }
+            out += "\n";
+        });
+        out += "\n";
+    });
+    document.getElementById('quizOutput').value = out;
+}
+
+// ================= RAW VIEW HIGHLIGHT & LINE NUMBERS =================
+function updateLineNumbers(text) {
+    const lines = text.split('\n').length;
+    document.getElementById('lineNumbers').innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('\n');
+}
+
+function jumpToRaw(text) {
+    setTab('raw');
+    const rawDiv = document.getElementById('rawContent');
+    const originalText = fullXmlText;
+    
+    if (!originalText || !text) return;
+
+    const index = originalText.indexOf(text);
+    
+    if (index !== -1) {
+        const before = originalText.substring(0, index);
+        const match = originalText.substring(index, index + text.length);
+        const after = originalText.substring(index + text.length);
+        
+        const escapeHtml = (unsafe) => {
+            return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        rawDiv.innerHTML = escapeHtml(before) + 
+                           '<span id="jumpTarget" class="highlight-flash">' + escapeHtml(match) + '</span>' + 
+                           escapeHtml(after);
+
+        const target = document.getElementById('jumpTarget');
+        if(target) {
+            target.scrollIntoView({behavior: "smooth", block: "center"});
+            document.getElementById('rawBackBtn').style.display = 'block';
+        }
+    } else {
+        alert("Exact match not found in Raw view.");
+    }
+}
+
+// ================= FILE & PARSING =================
 function setTab(mode) {
     document.getElementById('view-tree').style.display = mode === 'tree' ? 'block' : 'none';
     document.getElementById('treeToolbar').style.display = mode === 'tree' ? 'flex' : 'none';
@@ -53,7 +509,6 @@ function setTab(mode) {
     if(mode === 'tree') document.getElementById('rawBackBtn').style.display = 'none';
 }
 
-// --- UPLOAD & DECRYPT ---
 document.getElementById('fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -72,17 +527,17 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
         
         fullXmlText = await res.text();
         document.getElementById('rawContent').innerText = fullXmlText;
+        updateLineNumbers(fullXmlText);
         document.getElementById('dlBtn').disabled = false;
 
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(fullXmlText, "text/xml");
-        
         const ptBlocks = xmlDoc.querySelectorAll("PACKETTRACER5");
         if(ptBlocks.length === 0) throw new Error("Invalid XML");
         
         const targetBlock = ptBlocks[ptBlocks.length - 1];
         document.getElementById('sourceBadge').className = "badge success";
-        document.getElementById('sourceBadge').innerText = "Source: Answer Network";
+        document.getElementById('sourceBadge').innerText = file.name;
 
         parseDevices(targetBlock);
     } catch (err) {
@@ -93,7 +548,6 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     }
 });
 
-// --- PARSING ---
 function parseDevices(rootNode) {
     const root = document.getElementById('treeRoot');
     root.innerHTML = '';
@@ -107,25 +561,20 @@ function parseDevices(rootNode) {
         
         const devNode = createTreeItem(name, "device", root);
 
-        // 1. RUNNING CONFIG
         const runConfig = engine.querySelector("RUNNINGCONFIG");
         if(runConfig) {
             const confFolder = createTreeItem("Running Config", "folder", devNode.childrenContainer);
             addExpandSubtreeBtn(confFolder);
-            const lines = runConfig.querySelectorAll("LINE");
-            parseIOS(lines, confFolder.childrenContainer, name, "running");
+            parseIOS(runConfig.querySelectorAll("LINE"), confFolder.childrenContainer, name, "running");
         }
-
-        // 2. STARTUP CONFIG
+        
         const startConfig = engine.querySelector("STARTUPCONFIG");
         if(startConfig) {
             const confFolder = createTreeItem("Startup Config", "folder", devNode.childrenContainer);
             addExpandSubtreeBtn(confFolder);
-            const lines = startConfig.querySelectorAll("LINE");
-            parseIOS(lines, confFolder.childrenContainer, name, "startup");
+            parseIOS(startConfig.querySelectorAll("LINE"), confFolder.childrenContainer, name, "startup");
         }
 
-        // 3. OTHER ATTRIBUTES
         const hwFolder = createTreeItem("Other Attributes", "folder", devNode.childrenContainer);
         addExpandSubtreeBtn(hwFolder);
         parseXML(engine, hwFolder.childrenContainer, name, []);
@@ -172,7 +621,6 @@ function parseXML(node, container, devName, path) {
     }
 
     const children = Array.from(node.children);
-    
     if(children.length === 0) {
         const val = node.textContent;
         if(val && val.trim()) {
@@ -196,7 +644,6 @@ function parseXML(node, container, devName, path) {
     }
 }
 
-// --- UI HELPERS ---
 function createTreeItem(text, type, parent) {
     const div = document.createElement('div');
     div.className = `tree-item type-${type}`;
@@ -258,21 +705,21 @@ function addActions(uiObj, checkData, rawValueForSearch) {
     const revealBtn = document.createElement('span');
     revealBtn.className = 'mini-btn reveal-btn';
     revealBtn.innerText = '👁️';
-    revealBtn.title = "Reveal in Tree";
-    revealBtn.style.display = 'none';
+    revealBtn.title = "Jump to location";
+    revealBtn.style.display = 'none'; 
     revealBtn.onclick = () => revealInTree(uiObj);
 
-    const addBtn = document.createElement('span');
-    addBtn.className = 'mini-btn';
-    addBtn.innerText = 'Add';
-    addBtn.onclick = () => addCheck(checkData);
-    
     const viewBtn = document.createElement('span');
     viewBtn.className = 'mini-btn';
     viewBtn.innerText = '<>';
     viewBtn.title = "Find in Raw XML";
     viewBtn.onclick = () => jumpToRaw(searchValue);
 
+    const addBtn = document.createElement('span');
+    addBtn.className = 'mini-btn';
+    addBtn.innerText = 'Add';
+    addBtn.onclick = () => addCheck(checkData);
+    
     actionsDiv.appendChild(revealBtn);
     actionsDiv.appendChild(viewBtn);
     actionsDiv.appendChild(addBtn);
@@ -295,29 +742,10 @@ function revealInTree(uiObj) {
     }, 100);
 }
 
-function jumpToRaw(text) {
-    setTab('raw');
-    const rawDiv = document.getElementById('rawContent');
-    const content = rawDiv.innerText;
-    const index = content.indexOf(text);
-    
-    if (index !== -1) {
-        const lines = content.substring(0, index).split('\n').length;
-        const lineHeight = 17.5; 
-        const scrollPos = (lines * lineHeight) - 150; 
-        document.getElementById('view-raw').scrollTop = scrollPos > 0 ? scrollPos : 0;
-        document.getElementById('rawBackBtn').style.display = 'block';
-    } else {
-        alert("Exact match not found in Raw view.");
-    }
-}
-
 function filterTree() {
     const query = document.getElementById('searchBox').value.toLowerCase();
     const items = document.querySelectorAll('.tree-item');
-    const clearBtn = document.getElementById('searchClear');
-    
-    clearBtn.style.display = query ? 'block' : 'none';
+    document.getElementById('searchClear').style.display = query ? 'block' : 'none';
     const revealBtns = document.querySelectorAll('.reveal-btn');
     revealBtns.forEach(b => b.style.display = query ? 'inline-block' : 'none');
 
@@ -350,17 +778,11 @@ function filterTree() {
         }
     });
 }
-
-function clearSearch() {
-    document.getElementById('searchBox').value = '';
-    filterTree();
-}
-
+function clearSearch() { document.getElementById('searchBox').value = ''; filterTree(); }
 function expandAll(expand) {
     document.querySelectorAll('.children').forEach(el => el.style.display = expand ? 'block' : 'none');
     document.querySelectorAll('.tree-item').forEach(el => el.classList.toggle('expanded', expand));
 }
-
 function downloadXML() {
     const blob = new Blob([fullXmlText], { type: 'text/xml' });
     const url = URL.createObjectURL(blob);
@@ -371,74 +793,3 @@ function downloadXML() {
     a.click();
     document.body.removeChild(a);
 }
-
-function addCheck(data) {
-    checks.push({ ...data, message: `Check ${data.value}`, points: 10, source: 'running' });
-    renderChecks();
-}
-
-function renderChecks() {
-    const list = document.getElementById('checksList');
-    list.innerHTML = '';
-    document.getElementById('checkCount').innerText = checks.length;
-
-    checks.forEach((c, i) => {
-        const div = document.createElement('div');
-        div.className = 'check-card';
-        const typeColor = c.type === 'XmlMatch' ? '#66d9ef' : '#a6e22e';
-
-        div.innerHTML = `
-            <div class="check-header">
-                <span>${c.device} <span style="color:${typeColor}; font-weight:normal;">(${c.type})</span></span>
-                <span class="remove-x" style="cursor:pointer" onclick="checks.splice(${i},1);renderChecks()">×</span>
-            </div>
-            <div class="settings-grid">
-                <div><label class="field-label">Message</label><input class="field-input" value="${c.message}" oninput="checks[${i}].message=this.value;gen()"></div>
-                <div><label class="field-label">Points</label><input type="number" class="field-input" value="${c.points}" oninput="checks[${i}].points=this.value;gen()"></div>
-            </div>
-            <div><label class="field-label">Value</label><input class="field-input" value="${c.value.replace(/"/g, '&quot;')}" oninput="checks[${i}].value=this.value;gen()"></div>
-        `;
-        list.appendChild(div);
-    });
-    gen();
-}
-
-function gen() { generateTOML(); }
-
-function generateTOML() {
-    const title = document.getElementById('confTitle').value;
-    const maxSub = document.getElementById('confMaxSub').value;
-    const rateCount = document.getElementById('confRateCount').value;
-    const rateWin = document.getElementById('confRateWin').value;
-    
-    const showMsg = document.getElementById('confShowMsg').checked;
-    const showScore = document.getElementById('confShowScore').checked;
-    const retainPka = document.getElementById('confRetainPka').checked;
-    const retainXml = document.getElementById('confRetainXml').checked;
-
-    let out = `title = "${title}"\n\n`;
-    out += `[options]\nshow_check_messages = ${showMsg}\nshow_score = ${showScore}\nretain_pka = ${retainPka}\nretain_xml = ${retainXml}\n`;
-    out += `max_submissions = ${maxSub}\nrate_limit_count = ${rateCount}\nrate_limit_window_seconds = ${rateWin}\n\n`;
-
-    checks.forEach(c => {
-        out += `[[check]]\nmessage = "${c.message}"\npoints = ${c.points}\ndevice = "${c.device}"\n`;
-        out += `    [[check.pass]]\n    type = "${c.type}"\n`;
-        if(c.type === 'XmlMatch') {
-            const pathArr = JSON.parse(c.path).map(s => `"${s}"`).join(', ');
-            out += `    path = [${pathArr}]\n    value = "${c.value}"\n\n`;
-        } else {
-            out += `    source = "${c.source}"\n    context = "${c.context}"\n    value = "${c.value.replace(/"/g, '\\"')}"\n\n`;
-        }
-    });
-
-    document.getElementById('tomlOutput').value = out;
-}
-
-function copyToClipboard() {
-    const copyText = document.getElementById("tomlOutput");
-    copyText.select();
-    document.execCommand("copy");
-    alert("Copied!");
-}
-
-gen();
