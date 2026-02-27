@@ -29,7 +29,6 @@ window.onload = () => {
     renderLabSelector();
     renderChecks();
     
-    // Bind Globals
     document.getElementById('confMaxSub').value = globalOpts.max_submissions;
     document.getElementById('confRateCount').value = globalOpts.rate_limit_count;
     document.getElementById('confRateWin').value = globalOpts.rate_limit_window;
@@ -234,7 +233,6 @@ function renderChecks() {
 
 function updateCheck(idx, key, val) {
     labs[currentLabIdx].checks[idx][key] = val;
-    // Rerender if type changed to toggle Source/Context visibility
     if(key === 'type') renderChecks(); 
     else genLab();
 }
@@ -334,7 +332,11 @@ function deleteQuiz() {
 }
 
 function addQuestion() {
-    quizzes[currentQuizIdx].questions.push({ text: "New Question", type: "radio", explanation: "", answers: [{text:"Option 1", correct:true}, {text:"Option 2", correct:false}], pairs: [] });
+    // UPDATED: Default points to 1, add image/pka placeholders
+    quizzes[currentQuizIdx].questions.push({ 
+        text: "New Question", type: "radio", explanation: "", points: 1, image: "", pka: "", 
+        answers: [{text:"Option 1", correct:true}, {text:"Option 2", correct:false}], pairs: [] 
+    });
     renderQuestions();
 }
 
@@ -347,6 +349,8 @@ function renderQuestions() {
     qs.forEach((q, i) => {
         const div = document.createElement('div');
         div.className = 'q-card';
+        
+        // UPDATED: Added 3-column row for Points, Image, and PKA
         div.innerHTML = `
             <div class="q-header"><span>Q${i+1}</span><span class="remove-x" onclick="removeQuestion(${i})">×</span></div>
             <div class="settings-grid">
@@ -360,6 +364,13 @@ function renderQuestions() {
                     </select>
                 </div>
             </div>
+            
+            <div class="settings-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div><label class="field-label">Points</label><input type="number" class="field-input" value="${q.points !== undefined ? q.points : 1}" oninput="updateQ(${i}, 'points', parseInt(this.value)||0)"></div>
+                <div><label class="field-label">Image File (Opt)</label><input class="field-input" placeholder="e.g. topo.png" value="${q.image||''}" oninput="updateQ(${i}, 'image', this.value)"></div>
+                <div><label class="field-label">PKA Exhibit (Opt)</label><input class="field-input" placeholder="e.g. lab.pka" value="${q.pka||''}" oninput="updateQ(${i}, 'pka', this.value)"></div>
+            </div>
+
             <div><label class="field-label">Explanation</label><input class="field-input" value="${q.explanation||''}" oninput="updateQ(${i}, 'explanation', this.value)"></div>
             <div class="answer-list" id="q-answers-${i}"></div>
         `;
@@ -450,7 +461,12 @@ function genQuiz() {
         out += `[[quizzes]]\nid = "${q.id}"\ntitle = "${q.title}"\nenabled = ${q.enabled}\n`;
         out += `time_limit_minutes = ${q.time}\nmax_attempts = ${q.attempts}\nshow_score = ${q.show_score}\nshow_corrections = ${q.show_correct}\n\n`;
         q.questions.forEach(qs => {
-            out += `    [[quizzes.questions]]\n    text = "${qs.text}"\n    type = "${qs.type}"\n    explanation = "${qs.explanation || ''}"\n`;
+            // UPDATED: Output points, image, and pka if they exist
+            out += `    [[quizzes.questions]]\n    text = "${qs.text}"\n    type = "${qs.type}"\n    points = ${qs.points !== undefined ? qs.points : 1}\n`;
+            if (qs.image && qs.image.trim() !== '') out += `    image = "${qs.image}"\n`;
+            if (qs.pka && qs.pka.trim() !== '') out += `    pka = "${qs.pka}"\n`;
+            out += `    explanation = "${qs.explanation || ''}"\n`;
+            
             if(qs.type === 'text') { out += `    regex = "${(qs.regex||'').replace(/\\/g, '\\\\')}"\n`; }
             else if (qs.type === 'matching') { if(qs.pairs) { qs.pairs.forEach(p => { out += `        [[quizzes.questions.pairs]]\n        left = "${p.left}"\n        right = "${p.right}"\n`; }); } }
             else { if(qs.answers) { qs.answers.forEach(a => { out += `        [[quizzes.questions.answers]]\n        text = "${a.text}"\n        correct = ${a.correct}\n`; }); } }
