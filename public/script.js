@@ -2,20 +2,17 @@
 let fullXmlText = "";
 let currentMode = 'lab';
 
-let globalOpts = {
-    max_submissions: 0,
-    rate_limit_count: 5,
-    rate_limit_window: 60,
-    retain_pka: true,
-    retain_xml: false,
-    show_leaderboard: true
-};
-
+// Per-Lab defaults: Max Upload=2MB, Max XML=25MB
 let labs = [{
     id: "lab1",
     title: "Lab 1",
     show_score: true,
     show_msg: true,
+    max_submissions: 0,
+    max_upload_mb: 2,
+    max_xml_output_mb: 25,
+    rate_limit_count: 5,
+    rate_limit_window: 60,
     checks: []
 }];
 let currentLabIdx = 0;
@@ -28,13 +25,6 @@ window.onload = () => {
     toggleHelp();
     renderLabSelector();
     renderChecks();
-    
-    document.getElementById('confMaxSub').value = globalOpts.max_submissions;
-    document.getElementById('confRateCount').value = globalOpts.rate_limit_count;
-    document.getElementById('confRateWin').value = globalOpts.rate_limit_window;
-    document.getElementById('confLeaderboard').value = globalOpts.show_leaderboard.toString();
-    document.getElementById('confRetainPka').checked = globalOpts.retain_pka;
-    document.getElementById('confRetainXml').checked = globalOpts.retain_xml;
     
     setupResizer('resizerH', 'leftPane', 'horizontal');
     setupResizer('resizerV', 'outputPane', 'vertical');
@@ -95,16 +85,6 @@ function copyToClipboard(type) {
     alert("Copied config!");
 }
 
-function updateGlobal() {
-    globalOpts.max_submissions = parseInt(document.getElementById('confMaxSub').value);
-    globalOpts.rate_limit_count = parseInt(document.getElementById('confRateCount').value);
-    globalOpts.rate_limit_window = parseInt(document.getElementById('confRateWin').value);
-    globalOpts.retain_pka = document.getElementById('confRetainPka').checked;
-    globalOpts.retain_xml = document.getElementById('confRetainXml').checked;
-    globalOpts.show_leaderboard = (document.getElementById('confLeaderboard').value === 'true');
-    genLab();
-}
-
 // ================= LAB LOGIC =================
 function renderLabSelector() {
     const sel = document.getElementById('labSelector');
@@ -126,6 +106,13 @@ function loadLabToUI() {
     document.getElementById('labTitle').value = l.title;
     document.getElementById('labShowMsg').checked = l.show_msg;
     document.getElementById('labShowScore').checked = l.show_score;
+    
+    document.getElementById('labMaxPka').value = l.max_upload_mb !== undefined ? l.max_upload_mb : 2;
+    document.getElementById('labMaxXml').value = l.max_xml_output_mb !== undefined ? l.max_xml_output_mb : 25;
+    document.getElementById('labMaxSub').value = l.max_submissions !== undefined ? l.max_submissions : 0;
+    document.getElementById('labRateCount').value = l.rate_limit_count !== undefined ? l.rate_limit_count : 5;
+    document.getElementById('labRateWin').value = l.rate_limit_window !== undefined ? l.rate_limit_window : 60;
+    
     renderChecks();
 }
 
@@ -136,7 +123,13 @@ function selectLab(idx) {
 
 function addLab() {
     const newIdx = labs.length;
-    labs.push({ id: `lab${newIdx + 1}`, title: `Lab ${newIdx + 1}`, show_score: true, show_msg: true, checks: [] });
+    labs.push({ 
+        id: `lab${newIdx + 1}`, 
+        title: `Lab ${newIdx + 1}`, 
+        show_score: true, show_msg: true, 
+        max_submissions: 0, max_upload_mb: 2, max_xml_output_mb: 25, rate_limit_count: 5, rate_limit_window: 60,
+        checks: [] 
+    });
     currentLabIdx = newIdx;
     renderLabSelector();
 }
@@ -155,6 +148,13 @@ function updateLabMeta() {
     l.title = document.getElementById('labTitle').value;
     l.show_msg = document.getElementById('labShowMsg').checked;
     l.show_score = document.getElementById('labShowScore').checked;
+    
+    l.max_upload_mb = parseInt(document.getElementById('labMaxPka').value) || 2;
+    l.max_xml_output_mb = parseInt(document.getElementById('labMaxXml').value) || 25;
+    l.max_submissions = parseInt(document.getElementById('labMaxSub').value) || 0;
+    l.rate_limit_count = parseInt(document.getElementById('labRateCount').value) || 0;
+    l.rate_limit_window = parseInt(document.getElementById('labRateWin').value) || 0;
+
     const sel = document.getElementById('labSelector');
     if(sel.options[currentLabIdx]) sel.options[currentLabIdx].text = l.title;
     genLab();
@@ -242,16 +242,19 @@ function removeCheck(idx) {
 }
 
 function genLab() {
-    let out = `[options]\n`;
-    out += `max_submissions = ${globalOpts.max_submissions}\n`;
-    out += `rate_limit_count = ${globalOpts.rate_limit_count}\n`;
-    out += `rate_limit_window_seconds = ${globalOpts.rate_limit_window}\n`;
-    out += `retain_pka = ${globalOpts.retain_pka}\n`;
-    out += `retain_xml = ${globalOpts.retain_xml}\n`;
-    out += `show_leaderboard = ${globalOpts.show_leaderboard}\n\n`;
-    
+    let out = "";
     labs.forEach(l => {
-        out += `[[labs]]\nid = "${l.id}"\ntitle = "${l.title}"\nshow_score = ${l.show_score}\nshow_check_messages = ${l.show_msg}\n\n`;
+        out += `[[labs]]\n`;
+        out += `id = "${l.id}"\n`;
+        out += `title = "${l.title}"\n`;
+        out += `show_score = ${l.show_score}\n`;
+        out += `show_check_messages = ${l.show_msg}\n`;
+        out += `max_submissions = ${l.max_submissions}\n`;
+        out += `max_upload_mb = ${l.max_upload_mb}\n`;
+        out += `max_xml_output_mb = ${l.max_xml_output_mb}\n`;
+        out += `rate_limit_count = ${l.rate_limit_count}\n`;
+        out += `rate_limit_window_seconds = ${l.rate_limit_window}\n\n`;
+        
         l.checks.forEach(c => {
             out += `    [[labs.checks]]\n    message = "${c.message}"\n    points = ${c.points}\n    device = "${c.device}"\n`;
             out += `        [[labs.checks.pass]]\n        type = "${c.type}"\n`;
@@ -332,7 +335,6 @@ function deleteQuiz() {
 }
 
 function addQuestion() {
-    // UPDATED: Default points to 1, add image/pka placeholders
     quizzes[currentQuizIdx].questions.push({ 
         text: "New Question", type: "radio", explanation: "", points: 1, image: "", pka: "", 
         answers: [{text:"Option 1", correct:true}, {text:"Option 2", correct:false}], pairs: [] 
@@ -349,8 +351,6 @@ function renderQuestions() {
     qs.forEach((q, i) => {
         const div = document.createElement('div');
         div.className = 'q-card';
-        
-        // UPDATED: Added 3-column row for Points, Image, and PKA
         div.innerHTML = `
             <div class="q-header"><span>Q${i+1}</span><span class="remove-x" onclick="removeQuestion(${i})">×</span></div>
             <div class="settings-grid">
@@ -461,7 +461,6 @@ function genQuiz() {
         out += `[[quizzes]]\nid = "${q.id}"\ntitle = "${q.title}"\nenabled = ${q.enabled}\n`;
         out += `time_limit_minutes = ${q.time}\nmax_attempts = ${q.attempts}\nshow_score = ${q.show_score}\nshow_corrections = ${q.show_correct}\n\n`;
         q.questions.forEach(qs => {
-            // UPDATED: Output points, image, and pka if they exist
             out += `    [[quizzes.questions]]\n    text = "${qs.text}"\n    type = "${qs.type}"\n    points = ${qs.points !== undefined ? qs.points : 1}\n`;
             if (qs.image && qs.image.trim() !== '') out += `    image = "${qs.image}"\n`;
             if (qs.pka && qs.pka.trim() !== '') out += `    pka = "${qs.pka}"\n`;

@@ -117,25 +117,6 @@
         <!-- RIGHT PANE -->
         <div class="pane right">
             
-            <div class="settings-card compact" style="border-bottom: 2px solid var(--accent);">
-                <div class="settings-header-compact">Global Options</div>
-                <div class="settings-grid compact-grid">
-                    <div><label class="field-label">Max Subs</label><input type="number" class="field-input" id="confMaxSub" value="0" oninput="updateGlobal()"></div>
-                    <div><label class="field-label">Rate (Cnt)</label><input type="number" class="field-input" id="confRateCount" value="5" oninput="updateGlobal()"></div>
-                    <div><label class="field-label">Win (Sec)</label><input type="number" class="field-input" id="confRateWin" value="60" oninput="updateGlobal()"></div>
-                    <div><label class="field-label">Leaderboard</label>
-                        <select class="field-input" id="confLeaderboard" onchange="updateGlobal()">
-                            <option value="true">Enabled</option>
-                            <option value="false">Disabled</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="settings-row" style="margin-top:2px;">
-                    <label class="custom-label"><input type="checkbox" id="confRetainPka" checked onchange="updateGlobal()"><span class="checkmark"></span> Save PKA</label>
-                    <label class="custom-label"><input type="checkbox" id="confRetainXml" onchange="updateGlobal()"><span class="checkmark"></span> Save XML</label>
-                </div>
-            </div>
-
             <div class="settings-card compact">
                 <div style="margin-bottom: 8px;">
                     <label class="field-label" style="color:var(--accent); font-weight:bold;">SELECT ACTIVE LAB</label>
@@ -145,6 +126,17 @@
                 <div class="settings-grid compact-grid">
                     <div><label class="field-label">Lab ID (slug)</label><input class="field-input" id="labId" oninput="updateLabMeta()"></div>
                     <div><label class="field-label">Lab Title</label><input class="field-input" id="labTitle" oninput="updateLabMeta()"></div>
+                    
+                    <div><label class="field-label">Max PKA (MB)</label><input type="number" class="field-input" id="labMaxPka" oninput="updateLabMeta()"></div>
+                    <div><label class="field-label">Max XML (MB)</label><input type="number" class="field-input" id="labMaxXml" oninput="updateLabMeta()"></div>
+                    
+                    <div><label class="field-label">Max Submissions (0=unlim)</label><input type="number" class="field-input" id="labMaxSub" oninput="updateLabMeta()"></div>
+                    <div><label class="field-label">Rate Limit (Count / Secs)</label>
+                        <div style="display:flex; gap:5px;">
+                            <input type="number" class="field-input" id="labRateCount" title="Count" oninput="updateLabMeta()" style="width:50%">
+                            <input type="number" class="field-input" id="labRateWin" title="Window (Secs)" oninput="updateLabMeta()" style="width:50%">
+                        </div>
+                    </div>
                 </div>
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; padding-top:5px; border-top:1px solid #333;">
