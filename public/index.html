@@ -137,6 +137,10 @@
                             <input type="number" class="field-input" id="labRateWin" title="Window (Secs)" oninput="updateLabMeta()" style="width:50%">
                         </div>
                     </div>
+
+                    <!-- NEW TIME & PKA FIELDS -->
+                    <div><label class="field-label">Time Limit (Mins, 0=unlim)</label><input type="number" class="field-input" id="labTime" oninput="updateLabMeta()"></div>
+                    <div><label class="field-label">Starter PKA File</label><input type="text" class="field-input" id="labPkaFile" placeholder="e.g. lab1_starter.pka" oninput="updateLabMeta()"></div>
                 </div>
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; padding-top:5px; border-top:1px solid #333;">

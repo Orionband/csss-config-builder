@@ -2,7 +2,7 @@
 let fullXmlText = "";
 let currentMode = 'lab';
 
-// Per-Lab defaults: Max Upload=2MB, Max XML=25MB
+// Per-Lab defaults
 let labs = [{
     id: "lab1",
     title: "Lab 1",
@@ -13,6 +13,8 @@ let labs = [{
     max_xml_output_mb: 25,
     rate_limit_count: 5,
     rate_limit_window: 60,
+    time_limit_minutes: 0,
+    pka_file: "",
     checks: []
 }];
 let currentLabIdx = 0;
@@ -113,6 +115,10 @@ function loadLabToUI() {
     document.getElementById('labRateCount').value = l.rate_limit_count !== undefined ? l.rate_limit_count : 5;
     document.getElementById('labRateWin').value = l.rate_limit_window !== undefined ? l.rate_limit_window : 60;
     
+    // Bind the new fields
+    document.getElementById('labTime').value = l.time_limit_minutes !== undefined ? l.time_limit_minutes : 0;
+    document.getElementById('labPkaFile').value = l.pka_file || "";
+
     renderChecks();
 }
 
@@ -128,6 +134,7 @@ function addLab() {
         title: `Lab ${newIdx + 1}`, 
         show_score: true, show_msg: true, 
         max_submissions: 0, max_upload_mb: 2, max_xml_output_mb: 25, rate_limit_count: 5, rate_limit_window: 60,
+        time_limit_minutes: 0, pka_file: "",
         checks: [] 
     });
     currentLabIdx = newIdx;
@@ -154,6 +161,10 @@ function updateLabMeta() {
     l.max_submissions = parseInt(document.getElementById('labMaxSub').value) || 0;
     l.rate_limit_count = parseInt(document.getElementById('labRateCount').value) || 0;
     l.rate_limit_window = parseInt(document.getElementById('labRateWin').value) || 0;
+
+    // Save the new fields
+    l.time_limit_minutes = parseInt(document.getElementById('labTime').value) || 0;
+    l.pka_file = document.getElementById('labPkaFile').value.trim();
 
     const sel = document.getElementById('labSelector');
     if(sel.options[currentLabIdx]) sel.options[currentLabIdx].text = l.title;
@@ -253,7 +264,13 @@ function genLab() {
         out += `max_upload_mb = ${l.max_upload_mb}\n`;
         out += `max_xml_output_mb = ${l.max_xml_output_mb}\n`;
         out += `rate_limit_count = ${l.rate_limit_count}\n`;
-        out += `rate_limit_window_seconds = ${l.rate_limit_window}\n\n`;
+        out += `rate_limit_window_seconds = ${l.rate_limit_window}\n`;
+        
+        // Output the new fields correctly
+        if (l.pka_file && l.pka_file !== "") {
+            out += `pka_file = "${l.pka_file}"\n`;
+        }
+        out += `time_limit_minutes = ${l.time_limit_minutes}\n\n`;
         
         l.checks.forEach(c => {
             out += `    [[labs.checks]]\n    message = "${c.message}"\n    points = ${c.points}\n    device = "${c.device}"\n`;
