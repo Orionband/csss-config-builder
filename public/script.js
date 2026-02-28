@@ -115,7 +115,6 @@ function loadLabToUI() {
     document.getElementById('labRateCount').value = l.rate_limit_count !== undefined ? l.rate_limit_count : 5;
     document.getElementById('labRateWin').value = l.rate_limit_window !== undefined ? l.rate_limit_window : 60;
     
-    // Bind the new fields
     document.getElementById('labTime').value = l.time_limit_minutes !== undefined ? l.time_limit_minutes : 0;
     document.getElementById('labPkaFile').value = l.pka_file || "";
 
@@ -162,7 +161,6 @@ function updateLabMeta() {
     l.rate_limit_count = parseInt(document.getElementById('labRateCount').value) || 0;
     l.rate_limit_window = parseInt(document.getElementById('labRateWin').value) || 0;
 
-    // Save the new fields
     l.time_limit_minutes = parseInt(document.getElementById('labTime').value) || 0;
     l.pka_file = document.getElementById('labPkaFile').value.trim();
 
@@ -266,7 +264,6 @@ function genLab() {
         out += `rate_limit_count = ${l.rate_limit_count}\n`;
         out += `rate_limit_window_seconds = ${l.rate_limit_window}\n`;
         
-        // Output the new fields correctly
         if (l.pka_file && l.pka_file !== "") {
             out += `pka_file = "${l.pka_file}"\n`;
         }
@@ -639,6 +636,7 @@ function parseIOS(lines, container, devName, source) {
     });
 }
 
+// FIX: Prevent double tagging and output cleaner paths.
 function parseXML(node, container, devName, path) {
     if(node.tagName === "RUNNINGCONFIG" || node.tagName === "STARTUPCONFIG") return;
     
@@ -658,7 +656,7 @@ function parseXML(node, container, devName, path) {
         if(val && val.trim()) {
             const item = createTreeItem(`${node.tagName}: ${val}`, "leaf", container);
             const cleanPath = path.filter(p => p !== "ENGINE");
-            cleanPath.push(node.tagName, "0");
+            // DO NOT append the node.tagName again because the parent already added it to 'path'.
             addActions(item, { type:'XmlMatch', device:devName, path:JSON.stringify(cleanPath), value:val }, val);
         }
     } else {
@@ -670,7 +668,14 @@ function parseXML(node, container, devName, path) {
                 const label = nodes.length > 1 ? `${tag} [${idx}]` : tag;
                 const branch = createTreeItem(label, "folder", container);
                 if(nodes.length > 0 || child.children.length > 0 || child.hasAttributes()) addExpandSubtreeBtn(branch);
-                parseXML(child, branch.childrenContainer, devName, [...path, tag, idx.toString()]);
+                
+                const nextPath = [...path, tag];
+                // Only append index if there are multiple elements of the same type.
+                if (nodes.length > 1) {
+                    nextPath.push(idx.toString());
+                }
+                
+                parseXML(child, branch.childrenContainer, devName, nextPath);
             });
         }
     }
