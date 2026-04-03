@@ -53,7 +53,6 @@
         <h3>PKA Settings & Export</h3>
         <ul>
             <li><b>Timer Mode:</b> Set to <b>Countdown</b> and specify a time limit to enforce a deadline directly in the Packet Tracer client.</li>
-            <li><b>Dynamic Feedback:</b> Controls what score information, if any, students see during the activity.</li>
             <li><b>Lockable Features:</b> Restrict access to Delete Tool, Check Results, CLI access, and other features.</li>
             <li><b>Replace:</b> Replaces the answer network with a blank one as well as deleting checked items by the activity wizard.</li>
             <li><b>Download Modified PKA:</b> Exports the PKA with all settings applied.</li>
@@ -71,6 +70,7 @@
         <div class="mode-switcher">
             <button class="btn btn-outline active" id="modeLabBtn" onclick="switchMode('lab')">Lab Builder</button>
             <button class="btn btn-outline" id="modeQuizBtn" onclick="switchMode('quiz')">Quiz Builder</button>
+            <button class="btn btn-outline" id="modeSettingsBtn" onclick="switchMode('settings')">PKA Settings</button>
         </div>
         <button class="btn btn-outline" onclick="toggleHelp()" style="padding:2px 8px; border-radius:50%; width:24px; height:24px; justify-content:center;">?</button>
     </div>
@@ -91,6 +91,10 @@
     <div id="headerQuizControls" style="display:none; gap:10px; align-items:center;">
         <span class="badge" style="background:var(--accent); color:black;">Quiz Mode</span>
     </div>
+
+    <div id="headerSettingsControls" style="display:none; gap:10px; align-items:center;">
+        <span class="badge" style="background:var(--accent); color:black;">PKA Settings Mode</span>
+    </div>
 </header>
 
 <div class="container">
@@ -105,7 +109,6 @@
                 <div class="tab" onclick="setTab('settings')" id="tab-settings">PKA Settings</div>
             </div>
             
-            <!-- TREE TOOLBAR -->
             <div class="pane-toolbar" id="treeToolbar">
                 <div class="search-wrapper">
                     <input type="text" class="search-bar" id="searchBox" placeholder="Search config..." onkeyup="filterTree()">
@@ -115,7 +118,6 @@
                 <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(false)">Collapse</button>
             </div>
 
-            <!-- TREE VIEW -->
             <div class="scroll-area" id="view-tree">
                 <div style="text-align:center; padding:40px; color:#666;" id="loadingText">
                     Upload a PKA file to begin.
@@ -134,7 +136,7 @@
 
             <!-- PKA SETTINGS VIEW -->
             <div class="scroll-area" id="view-settings" style="display:none; padding:15px; background:#1a1a1a;">
-                <h3 style="color:var(--accent); margin-top: 0; margin-bottom: 15px;">PKA Modder</h3>
+                <h3 style="color:var(--accent); margin-top: 0; margin-bottom: 15px;">PKA Settings</h3>
                 
                 <div class="settings-card compact" style="margin-bottom: 15px;">
                     <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Timer Mode</label>
@@ -147,17 +149,6 @@
                         <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Time Limit (Minutes)</label>
                         <input type="number" id="pkaTimeLimit" class="field-input" value="0">
                     </div>
-                </div>
-
-                <div class="settings-card compact" style="margin-bottom: 15px;">
-                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Dynamic Feedback Mode</label>
-                    <select id="pkaFeedbackMode" class="field-input">
-                        <option value="0">None</option>
-                        <option value="1">Show item count percentage</option>
-                        <option value="2">Show score percentage</option>
-                        <option value="3">Show item count</option>
-                        <option value="4">Show score</option>
-                    </select>
                 </div>
 
                 <h4 style="color:#aaa; margin-bottom: 10px;">Lockable Features</h4>
@@ -289,6 +280,7 @@
             </div>
         </div>
     </div>
+
 </div>
 
 <script src="script.js"></script>

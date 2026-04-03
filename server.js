@@ -112,25 +112,15 @@ function setTimeLimit(xml, time_ms, timer_type) {
     return result;
 }
 
-function setDynamicFeedback(xml, type) {
-    const val = type == 0 ? "false" : "true";
-    const regex = /<DYNAMIC_PERCENTAGE_FEEDBACK\s+TYPE="[^"]*">[^<]*<\/DYNAMIC_PERCENTAGE_FEEDBACK>/g;
-    if (regex.test(xml)) {
-        return xml.replace(regex, `<DYNAMIC_PERCENTAGE_FEEDBACK TYPE="${type}">${val}</DYNAMIC_PERCENTAGE_FEEDBACK>`);
-    }
-    return xml;
-}
-
 app.post('/api/export', (req, res) => {
     try {
-        let { xml, locks, unlocks, timeMs, timerType, feedbackType } = req.body;
+        let { xml, locks, unlocks, timeMs, timerType } = req.body;
         
         if (!xml) return res.status(400).json({ error: "Missing XML data" });
 
         xml = clearRecentFiles(xml);
         if (locks || unlocks) xml = modifyLocks(xml, locks || [], unlocks || []);
         if (timerType !== undefined) xml = setTimeLimit(xml, timeMs || 0, timerType);
-        if (feedbackType !== undefined) xml = setDynamicFeedback(xml, feedbackType);
         
         const pkaBuffer = encryptPKA(xml);
         

@@ -1,5 +1,4 @@
-﻿// ================= DATA STATE =================
-let fullXmlText = "";
+﻿let fullXmlText = "";
 let currentMode = 'lab';
 
 // Per-Lab defaults
@@ -58,12 +57,15 @@ function switchMode(mode) {
     currentMode = mode;
     document.getElementById('modeLabBtn').className = mode === 'lab' ? 'btn btn-outline active' : 'btn btn-outline';
     document.getElementById('modeQuizBtn').className = mode === 'quiz' ? 'btn btn-outline active' : 'btn btn-outline';
+    document.getElementById('modeSettingsBtn').className = mode === 'settings' ? 'btn btn-outline active' : 'btn btn-outline';
     
     document.getElementById('labSection').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('quizSection').style.display = mode === 'quiz' ? 'flex' : 'none';
+    document.getElementById('settingsSection').style.display = mode === 'settings' ? 'block' : 'none';
     
     document.getElementById('headerLabControls').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('headerQuizControls').style.display = mode === 'quiz' ? 'flex' : 'none';
+    document.getElementById('headerSettingsControls').style.display = mode === 'settings' ? 'flex' : 'none';
 }
 
 function toggleHelp() {
@@ -203,7 +205,7 @@ function addCheck(data) {
     let defaultMsg = `Check ${data.value || 'Configuration'}`;
     if (defaultMsg.length > 40) defaultMsg = defaultMsg.substring(0, 40) + '...';
     
-    let checkObj = { ...data, message: defaultMsg, points: 10, source: data.source || 'running' };
+    let checkObj = { ...data, message: defaultMsg, points: 1, source: data.source || 'running' };
     
     if (checkObj.type === 'Type5Match') {
         checkObj.mode = data.mode || 'device';
@@ -286,7 +288,7 @@ function renderChecks() {
                 <span class="remove-x" onclick="removeCheck(${i})">×</span>
             </div>
             <div class="settings-grid">
-                <div><label class="field-label">Message</label><input class="field-input" value="${(c.message||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'message', this.value)"></div>
+                <div><label class="field-label">Message</label><input class="field-input" value="${c.message}" oninput="updateCheck(${i}, 'message', this.value)"></div>
                 <div><label class="field-label">Points</label><input type="number" class="field-input" value="${c.points}" oninput="updateCheck(${i}, 'points', this.value)"></div>
             </div>
             
@@ -1116,15 +1118,6 @@ function readPKASettings(xml) {
         tLimit.value = "0";
     }
     togglePkaTimerInput();
-
-    // 3. Read Dynamic Feedback
-    const dynMatch = xml.match(/<DYNAMIC_PERCENTAGE_FEEDBACK\s+TYPE="([^"]*)">/);
-    const dfSelect = document.getElementById('pkaFeedbackMode');
-    if (dynMatch && dynMatch[1]) {
-        dfSelect.value = dynMatch[1];
-    } else {
-        dfSelect.value = "0";
-    }
 }
 
 async function replaceAnswerNetwork() {
@@ -1182,7 +1175,6 @@ async function exportModifiedPKA() {
 
     const mode = document.getElementById('pkaTimerMode').value;
     const mins = parseInt(document.getElementById('pkaTimeLimit').value) || 0;
-    const fbMode = parseInt(document.getElementById('pkaFeedbackMode').value) || 0;
     
     const locks = [];
     const unlocks = [];
@@ -1195,7 +1187,6 @@ async function exportModifiedPKA() {
         xml: fullXmlText,
         timerType: parseInt(mode),
         timeMs: mins * 60 * 1000,
-        feedbackType: fbMode,
         locks: locks,
         unlocks: unlocks
     };
