@@ -634,21 +634,40 @@ function buildInitialSet(initialBlock) {
 
 function markEmptyFolders(container) {
     let allUnchanged = true;
-    let hasItems = false;
     Array.from(container.children).forEach(child => {
         if (child.classList.contains('tree-item')) {
-            hasItems = true;
+            const isStructural = child.classList.contains('type-folder') || 
+                                 child.classList.contains('type-block') || 
+                                 child.classList.contains('type-device');
+            
             const subC = child.querySelector('.children');
-            if (subC && subC.children.length > 0) {
+            
+            if (isStructural && subC) {
+                // Check contents recursively. An empty folder is "unchanged".
                 const subUnchanged = markEmptyFolders(subC);
-                if (subUnchanged) child.classList.add('diff-unchanged');
+                if (subUnchanged) {
+                    child.classList.add('diff-unchanged');
+                }
             }
+            
             if (!child.classList.contains('diff-unchanged')) {
                 allUnchanged = false;
             }
         }
     });
-    return hasItems && allUnchanged;
+    return allUnchanged;
+}
+
+function getCheckDataForCommand(trimmed, devName, source, context) {
+    const enableMatch = trimmed.match(/^enable\s+secret\s+5\s+\$1\$.+$/i);
+    if (enableMatch) {
+        return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
+    }
+    const userMatch = trimmed.match(/^username\s+(\S+)(?:\s+privilege\s+\d+)?\s+secret\s+5\s+\$1\$.+$/i);
+    if (userMatch) {
+        return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
+    }
+    return { type:'ConfigMatch', device:devName, context:context, value:trimmed, source:source };
 }
 
 // ================= FILE & PARSING =================
@@ -757,7 +776,9 @@ function parseIOS(lines, container, devName, source) {
                 if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
                     cmdUI.element.classList.add('diff-unchanged');
                 }
-                addActions(cmdUI, { type:'ConfigMatch', device:devName, context:'global', value:trimmed, source:source });
+                
+                const checkData = getCheckDataForCommand(trimmed, devName, source, 'global');
+                addActions(cmdUI, checkData);
             }
         } else if (blockUI) {
             const trimmed = txt.trim();
@@ -765,7 +786,9 @@ function parseIOS(lines, container, devName, source) {
             if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
                 cmdUI.element.classList.add('diff-unchanged');
             }
-            addActions(cmdUI, { type:'ConfigMatch', device:devName, context:blockContext, value:trimmed, source:source });
+            
+            const checkData = getCheckDataForCommand(trimmed, devName, source, blockContext);
+            addActions(cmdUI, checkData);
         }
     });
 }
