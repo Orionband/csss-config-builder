@@ -1,5 +1,4 @@
-﻿===== C:\Users\MarcT\OneDrive\projects\csss-config-builder\public\style.css =====
-:root { --bg: #101010; --card: #262626; --accent: #f05d5e; --text: #f1f2eb; --border: #333; --input-bg: #1a1a1a; }
+﻿:root { --bg: #101010; --card: #262626; --accent: #f05d5e; --text: #f1f2eb; --border: #333; --input-bg: #1a1a1a; }
 * { scrollbar-width: thin; scrollbar-color: var(--accent) var(--bg); box-sizing: border-box; }
 ::-webkit-scrollbar { width: 8px; height: 8px; } 
 ::-webkit-scrollbar-track { background: var(--bg); }
