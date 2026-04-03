@@ -28,7 +28,7 @@
             <li><b>ConfigRegex / Not:</b> Pattern match (e.g., <code>^enable secret 5 .*</code>).</li>
             <li><b>XmlMatch / Not:</b> Hardware attributes (e.g., <code>Model</code>).</li>
             <li><b>XmlRegex / Not:</b> Pattern match for XML values.</li>
-            <li><b>Type5Match / Not:</b> Validates Cisco Type 5 (MD5) hashes directly from the config without storing the salt manually. Supports Device (`enable secret`) and User modes.</li>
+            <li><b>Type5Match / Not:</b> Validates Cisco Type 5 (MD5) hashes directly from the config. Supports Device (`enable secret`) and User modes.</li>
         </ul>
 
         <h3>3. Quiz Workflow</h3>
@@ -38,8 +38,11 @@
             <li><b>Radio:</b> Single choice only.</li>
         </ul>
 
-        <h3>4. Export</h3>
-        <p>Copy the text from the bottom output panel into your <code>lab.conf</code> or <code>quiz.conf</code>.</p>
+        <h3>4. PKA Settings & Export</h3>
+        <ul>
+            <li>Use the <b>PKA Settings</b> tab to lock elements, set timers, and clear old user tracking out of the XML.</li>
+            <li>Download the re-encrypted `.pka` directly to deploy to your students.</li>
+        </ul>
 
         <div class="warning-box">
             <span class="warning-title">Anti-Cheat</span>
@@ -58,6 +61,7 @@
         <div class="mode-switcher">
             <button class="btn btn-outline active" id="modeLabBtn" onclick="switchMode('lab')">Lab Builder</button>
             <button class="btn btn-outline" id="modeQuizBtn" onclick="switchMode('quiz')">Quiz Builder</button>
+            <button class="btn btn-outline" id="modeSettingsBtn" onclick="switchMode('settings')">PKA Settings</button>
         </div>
         <button class="btn btn-outline" onclick="toggleHelp()" style="padding:2px 8px; border-radius:50%; width:24px; height:24px; justify-content:center;">?</button>
     </div>
@@ -77,6 +81,10 @@
 
     <div id="headerQuizControls" style="display:none; gap:10px; align-items:center;">
         <span class="badge" style="background:var(--accent); color:black;">Quiz Mode</span>
+    </div>
+
+    <div id="headerSettingsControls" style="display:none; gap:10px; align-items:center;">
+        <span class="badge" style="background:var(--accent); color:black;">PKA Modder Mode</span>
     </div>
 </header>
 
@@ -143,7 +151,6 @@
                         </div>
                     </div>
 
-                    <!-- NEW TIME & PKA FIELDS -->
                     <div><label class="field-label">Time Limit (Mins, 0=unlim)</label><input type="number" class="field-input" id="labTime" oninput="updateLabMeta()"></div>
                     <div><label class="field-label">Starter PKA File</label><input type="text" class="field-input" id="labPkaFile" placeholder="e.g. lab1_starter.pka" oninput="updateLabMeta()"></div>
                 </div>
@@ -227,6 +234,42 @@
             
             <div id="quizEmptyState" style="text-align:center; padding:50px; color:#666;">
                 Select or Create a Quiz.
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= SETTINGS SECTION ================= -->
+    <div id="settingsSection" class="section-wrapper" style="display:none; flex:1; width:100%; overflow:auto; padding:30px; background:#111;">
+        <div style="max-width: 900px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 5px; border: 1px solid var(--border);">
+            <h2 style="color:var(--accent); margin-top: 0;">PKA Settings & Export</h2>
+            <p style="color:#aaa; font-size:0.9rem; margin-bottom: 20px;">Configure Packet Tracer restrictions, set activity timers, and download the locked <code>.pka</code> to deploy to your students.</p>
+            
+            <div class="settings-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 30px; background: #1a1a1a; padding: 15px; border-radius: 4px; border: 1px solid #333;">
+                <div>
+                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Timer Mode</label>
+                    <select id="pkaTimerMode" class="field-input">
+                        <option value="0">Elapsed Time</option>
+                        <option value="1">Countdown</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Time Limit (Minutes)</label>
+                    <input type="number" id="pkaTimeLimit" class="field-input" value="0">
+                </div>
+            </div>
+
+            <h3 style="margin-bottom:15px; color:#fff; font-size: 1.1rem;">Lockable Features</h3>
+            <div style="margin-bottom: 15px;">
+                <button class="mini-btn" onclick="toggleAllLocks(true)">Select All</button>
+                <button class="mini-btn" onclick="toggleAllLocks(false)">Deselect All</button>
+            </div>
+            
+            <div id="lockGrid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                <!-- Filled via JS -->
+            </div>
+            
+            <div style="margin-top:40px; text-align:center; padding-top: 20px; border-top: 1px solid #333;">
+                <button class="btn" style="padding:15px 40px; font-size:1.1rem; width: auto;" onclick="exportModifiedPKA()">⬇ Download Configured PKA</button>
             </div>
         </div>
     </div>

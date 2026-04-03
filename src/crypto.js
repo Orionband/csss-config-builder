@@ -1,4 +1,5 @@
 ﻿const twofish = require('twofish').twofish();
+const zlib = require('zlib');
 
 const xor = (a, b) => {
     const len = a.length;
@@ -56,17 +57,14 @@ const decryptPKA = (buffer) => {
     const key = Buffer.alloc(16, 137);
     const iv = Buffer.alloc(16, 16);
 
-    // 1. Deobfuscate
     const s1 = Buffer.allocUnsafe(totalBytes);
     for (let i = 0; i < totalBytes; i++) {
         s1[i] = (buffer[totalBytes - 1 - i] ^ ((totalBytes - (i * totalBytes)) | 0)) & 0xFF;
     }
 
-    // 2. Decrypt
     const tag = s1.subarray(totalBytes - 16);
     const ciphertext = s1.subarray(0, totalBytes - 16);
     
-    // Simple integrity check
     const nTag = cmac(key, 0, iv);
     const hTag = cmac(key, 1, Buffer.alloc(0));
     const cTag = cmac(key, 2, ciphertext);
@@ -82,12 +80,59 @@ const decryptPKA = (buffer) => {
         for (let j = 15; j >= 0; j--) { counter[j] = (counter[j] + 1) & 0xFF; if (counter[j] !== 0) break; }
     }
 
-    // 3. Finalize
     const s3 = Buffer.allocUnsafe(decrypted.length);
     const dLen = decrypted.length;
     for (let i = 0; i < dLen; i++) s3[i] = (decrypted[i] ^ (dLen - i)) & 0xFF;
 
-    return s3.subarray(4); // Return zlib stream
+    return s3.subarray(4); 
 };
 
-module.exports = { decryptPKA };
+const encryptPKA = (xmlString) => {
+    const xmlBuffer = Buffer.from(xmlString, 'utf8');
+    const compressed = zlib.deflateSync(xmlBuffer);
+    
+    const s3 = Buffer.alloc(compressed.length + 4);
+    s3.writeUInt32BE(xmlBuffer.length, 0); 
+    compressed.copy(s3, 4);
+
+    const dLen = s3.length;
+    const decrypted = Buffer.alloc(dLen);
+    for (let i = 0; i < dLen; i++) {
+        decrypted[i] = (s3[i] ^ (dLen - i)) & 0xFF;
+    }
+
+    const key = Buffer.alloc(16, 137);
+    const iv = Buffer.alloc(16, 16);
+    const nTag = cmac(key, 0, iv);
+    
+    let ciphertext = Buffer.alloc(dLen);
+    let counter = Buffer.from(nTag);
+    
+    for (let i = 0; i < dLen; i += 16) {
+        const k = Buffer.from(twofish.encrypt(Array.from(key), Array.from(counter)));
+        const lim = Math.min(16, dLen - i);
+        for (let j = 0; j < lim; j++) {
+            ciphertext[i + j] = decrypted[i + j] ^ k[j];
+        }
+        for (let j = 15; j >= 0; j--) { 
+            counter[j] = (counter[j] + 1) & 0xFF; 
+            if (counter[j] !== 0) break; 
+        }
+    }
+
+    const hTag = cmac(key, 1, Buffer.alloc(0));
+    const cTag = cmac(key, 2, ciphertext);
+    const tag = xor(xor(nTag, hTag), cTag);
+
+    const s1 = Buffer.concat([ciphertext, tag]);
+    const totalBytes = s1.length;
+    const finalBuffer = Buffer.alloc(totalBytes);
+    
+    for (let i = 0; i < totalBytes; i++) {
+        finalBuffer[totalBytes - 1 - i] = s1[i] ^ ((totalBytes - (i * totalBytes)) & 0xFF);
+    }
+
+    return finalBuffer;
+};
+
+module.exports = { decryptPKA, encryptPKA };

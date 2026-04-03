@@ -24,11 +24,26 @@ let currentQuizIdx = -1;
 
 let initialSet = {};
 
+const lockableFeatures = [
+    "Switching to Logical", "Switching to Physical", "Switching to Realtime", "Switching to Simulation", 
+    "Hide Event List on Start", "Hide Network Component Box in Wiring Closets", "Hide User Created Packet Window", 
+    "Note Tool", "Delete Tool", "Inspection Tool", "Drawing Tool", "Resize Tool", "Edit Environment", 
+    "Hide Wireless/Cellular Connection", "Toggling Animation", "Toggling Auto Dock Popup Window", "Toggling Sound", 
+    "Toggling Telephony Sound", "Toggling Show Port Information", "Enable Cable Length", "View Assessment Items", 
+    "View Connectivity Tests", "Edit Instructions", "Check Results", "Reset Activity", "Multi-user", "Create Devices", 
+    "Remove Devices", "Move Devices", "Change Interface", "Remove Interface", "Connect Links", "Disconnect Links", 
+    "Manage All Cables in Wiring Closet", "Create Cluster", "Remove Cluster", "Enter Cluster", "Move Cluster", 
+    "Create Physical Level", "Remove Physical Level", "Change Physical Level", "Global Tooltip", "Change Label", 
+    "Move Label", "Remove Notes/Annotations", "Auto Connect", "Change Display Names", "Change Wireless Coverage Range", 
+    "Change Bluetooth Transmit Range", "Use Thing Editor Tab", "Use I/O Devices Tab", "Use Attributes Tab"
+];
+
 // ================= INIT & UTILS =================
 window.onload = () => {
     toggleHelp();
     renderLabSelector();
     renderChecks();
+    initLocks();
     
     setupResizer('resizerH', 'leftPane', 'horizontal');
     setupResizer('resizerV', 'outputPane', 'vertical');
@@ -39,12 +54,15 @@ function switchMode(mode) {
     currentMode = mode;
     document.getElementById('modeLabBtn').className = mode === 'lab' ? 'btn btn-outline active' : 'btn btn-outline';
     document.getElementById('modeQuizBtn').className = mode === 'quiz' ? 'btn btn-outline active' : 'btn btn-outline';
+    document.getElementById('modeSettingsBtn').className = mode === 'settings' ? 'btn btn-outline active' : 'btn btn-outline';
     
     document.getElementById('labSection').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('quizSection').style.display = mode === 'quiz' ? 'flex' : 'none';
+    document.getElementById('settingsSection').style.display = mode === 'settings' ? 'block' : 'none';
     
     document.getElementById('headerLabControls').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('headerQuizControls').style.display = mode === 'quiz' ? 'flex' : 'none';
+    document.getElementById('headerSettingsControls').style.display = mode === 'settings' ? 'flex' : 'none';
 }
 
 function toggleHelp() {
@@ -640,8 +658,11 @@ function buildInitialSet(initialBlock) {
 
 function markEmptyFolders(container) {
     let allUnchanged = true;
+    let hasItems = false;
+    
     Array.from(container.children).forEach(child => {
         if (child.classList.contains('tree-item')) {
+            hasItems = true;
             const isStructural = child.classList.contains('type-folder') || 
                                  child.classList.contains('type-block') || 
                                  child.classList.contains('type-device');
@@ -649,16 +670,18 @@ function markEmptyFolders(container) {
             const subC = child.querySelector('.children');
             
             let subUnchanged = true;
-            if (subC && subC.children.length > 0) {
-                subUnchanged = markEmptyFolders(subC);
+            let subHasItems = false;
+            
+            if (subC) {
+                const result = markEmptyFolders(subC);
+                subUnchanged = result.allUnchanged;
+                subHasItems = result.hasItems;
             }
             
             if (isStructural) {
-                const headerUnchanged = child.classList.contains('type-folder') || 
-                                        child.classList.contains('type-device') || 
-                                        child.classList.contains('diff-unchanged');
-                
-                if (subUnchanged && headerUnchanged) {
+                // Determine if this structural element has any changes inside it.
+                // If it has NO items inside, or ALL items are unchanged -> it is unchanged.
+                if (!subHasItems || subUnchanged) {
                     child.classList.add('diff-unchanged');
                 } else {
                     child.classList.remove('diff-unchanged');
@@ -671,16 +694,18 @@ function markEmptyFolders(container) {
             }
         }
     });
-    return allUnchanged;
+    
+    return { allUnchanged, hasItems };
 }
 
 function getCheckDataForCommand(trimmed, devName, source, context) {
-    // Check for Type 5 enable secret
-    if (/^enable\s+secret\s+5\s+\$1\$/i.test(trimmed)) {
+    // Look for: enable secret 5 $1$...
+    const enableMatch = trimmed.match(/^enable\s+secret\s+5\s+(?:\$1\$[^\s]+)/i);
+    if (enableMatch) {
         return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
     }
-    // Check for Type 5 user secret
-    const userMatch = trimmed.match(/^username\s+([^ ]+).*secret\s+5\s+\$1\$/i);
+    // Look for: username <name> [privilege x] secret 5 $1$...
+    const userMatch = trimmed.match(/^username\s+(\S+)(?:\s+privilege\s+\d+)?\s+secret\s+5\s+(?:\$1\$[^\s]+)/i);
     if (userMatch) {
         return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
     }
@@ -797,6 +822,7 @@ function parseIOS(lines, container, devName, source) {
                 if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
                     cmdUI.element.classList.add('diff-unchanged');
                 }
+                
                 const checkData = getCheckDataForCommand(trimmed, devName, source, 'global');
                 addActions(cmdUI, checkData);
             }
@@ -806,6 +832,7 @@ function parseIOS(lines, container, devName, source) {
             if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
                 cmdUI.element.classList.add('diff-unchanged');
             }
+            
             const checkData = getCheckDataForCommand(trimmed, devName, source, blockContext);
             addActions(cmdUI, checkData);
         }
@@ -869,7 +896,7 @@ function createTreeItem(text, type, parent) {
 
     const row = document.createElement('div');
     row.className = 'tree-row';
-    row.innerHTML = `<span class="indicator"></span><span class="tree-text">${text}</span><div class="actions"></div>`;
+    row.innerHTML = `<span class="indicator"></span><span class="tree-text">${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span><div class="actions"></div>`;
     div.appendChild(row);
 
     const children = document.createElement('div');
@@ -1010,4 +1037,60 @@ function downloadXML() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+}
+
+// ================= SETTINGS EXPORT =================
+function initLocks() {
+    const grid = document.getElementById('lockGrid');
+    grid.innerHTML = '';
+    lockableFeatures.forEach(feat => {
+        const lbl = document.createElement('label');
+        lbl.className = 'custom-label';
+        lbl.style.marginBottom = "5px";
+        lbl.innerHTML = `<input type="checkbox" value="${feat}" class="lock-cb"><span class="checkmark"></span> <span style="margin-left: 5px">${feat}</span>`;
+        grid.appendChild(lbl);
+    });
+}
+
+function toggleAllLocks(check) {
+    document.querySelectorAll('.lock-cb').forEach(cb => cb.checked = check);
+}
+
+async function exportModifiedPKA() {
+    if (!fullXmlText) return alert("Please upload a PKA file first.");
+    
+    const mode = document.getElementById('pkaTimerMode').value;
+    const mins = parseInt(document.getElementById('pkaTimeLimit').value) || 0;
+    const locks = Array.from(document.querySelectorAll('.lock-cb:checked')).map(cb => cb.value);
+
+    const payload = {
+        xml: fullXmlText,
+        timerType: parseInt(mode),
+        timeMs: mins * 60 * 1000,
+        locks: locks
+    };
+
+    try {
+        const res = await fetch('/api/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            return alert("Export failed: " + err.error);
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "configured_lab.pka";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    } catch (e) {
+        alert("Export failed: " + e.message);
+    }
 }
