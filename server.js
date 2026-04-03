@@ -7,8 +7,7 @@ const path = require('path');
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Increase JSON limit to handle large XML strings payload
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '100mb' }));
 app.use(express.static('public'));
 
 app.post('/api/decrypt', upload.single('file'), (req, res) => {
@@ -39,33 +38,19 @@ app.post('/api/decrypt', upload.single('file'), (req, res) => {
     }
 });
 
-// Ported C++ Logic for PKA Modding
-function lockFeatures(xml, featuresToLock) {
+function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function modifyLocks(xml, locks, unlocks) {
     let result = xml;
-    for (const feature of featuresToLock) {
-        const idTag = `<ID>${feature}</ID>`;
-        let pos = 0;
-        while ((pos = result.indexOf(idTag, pos)) !== -1) {
-            const searchStart = Math.max(0, pos - 150);
-            const slice = result.substring(searchStart, pos);
-            const lastNodeIndex = slice.lastIndexOf("<NODE ");
-            
-            if (lastNodeIndex !== -1) {
-                const trueNodePos = searchStart + lastNodeIndex;
-                const closeBracket = result.indexOf(">", trueNodePos);
-                
-                if (closeBracket !== -1 && closeBracket < pos) {
-                    const nodeTag = result.substring(trueNodePos, closeBracket + 1);
-                    if (nodeTag.includes('on="no"')) {
-                        const onPos = result.indexOf('on="no"', trueNodePos);
-                        if (onPos !== -1 && onPos < closeBracket) {
-                            result = result.substring(0, onPos + 4) + "yes" + result.substring(onPos + 6);
-                        }
-                    }
-                }
-            }
-            pos += idTag.length;
-        }
+    for (const feature of locks) {
+        const regex = new RegExp(`(<NODE[^>]*on=)"no"([^>]*>\\s*<ID>${escapeRegex(feature)}</ID>)`, 'g');
+        result = result.replace(regex, `$1"yes"$2`);
+    }
+    for (const feature of unlocks) {
+        const regex = new RegExp(`(<NODE[^>]*on=)"yes"([^>]*>\\s*<ID>${escapeRegex(feature)}</ID>)`, 'g');
+        result = result.replace(regex, `$1"no"$2`);
     }
     return result;
 }
@@ -86,15 +71,25 @@ function setTimeLimit(xml, time_ms, timer_type) {
     return result;
 }
 
+function setDynamicFeedback(xml, type) {
+    const val = type == 0 ? "false" : "true";
+    const regex = /<DYNAMIC_PERCENTAGE_FEEDBACK\s+TYPE="[^"]*">[^<]*<\/DYNAMIC_PERCENTAGE_FEEDBACK>/g;
+    if (regex.test(xml)) {
+        return xml.replace(regex, `<DYNAMIC_PERCENTAGE_FEEDBACK TYPE="${type}">${val}</DYNAMIC_PERCENTAGE_FEEDBACK>`);
+    }
+    return xml;
+}
+
 app.post('/api/export', (req, res) => {
     try {
-        let { xml, locks, timeMs, timerType } = req.body;
+        let { xml, locks, unlocks, timeMs, timerType, feedbackType } = req.body;
         
         if (!xml) return res.status(400).json({ error: "Missing XML data" });
 
         xml = clearRecentFiles(xml);
-        if (locks && locks.length > 0) xml = lockFeatures(xml, locks);
+        if (locks || unlocks) xml = modifyLocks(xml, locks || [], unlocks || []);
         if (timerType !== undefined) xml = setTimeLimit(xml, timeMs || 0, timerType);
+        if (feedbackType !== undefined) xml = setDynamicFeedback(xml, feedbackType);
         
         const pkaBuffer = encryptPKA(xml);
         

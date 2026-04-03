@@ -54,15 +54,12 @@ function switchMode(mode) {
     currentMode = mode;
     document.getElementById('modeLabBtn').className = mode === 'lab' ? 'btn btn-outline active' : 'btn btn-outline';
     document.getElementById('modeQuizBtn').className = mode === 'quiz' ? 'btn btn-outline active' : 'btn btn-outline';
-    document.getElementById('modeSettingsBtn').className = mode === 'settings' ? 'btn btn-outline active' : 'btn btn-outline';
     
     document.getElementById('labSection').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('quizSection').style.display = mode === 'quiz' ? 'flex' : 'none';
-    document.getElementById('settingsSection').style.display = mode === 'settings' ? 'block' : 'none';
     
     document.getElementById('headerLabControls').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('headerQuizControls').style.display = mode === 'quiz' ? 'flex' : 'none';
-    document.getElementById('headerSettingsControls').style.display = mode === 'settings' ? 'flex' : 'none';
 }
 
 function toggleHelp() {
@@ -199,9 +196,18 @@ function updateLabMeta() {
 }
 
 function addCheck(data) {
-    let defaultMsg = `Check ${data.value}`;
+    let defaultMsg = `Check ${data.value || 'Configuration'}`;
     if (defaultMsg.length > 40) defaultMsg = defaultMsg.substring(0, 40) + '...';
-    labs[currentLabIdx].checks.push({ ...data, message: defaultMsg, points: 10, source: data.source || 'running' });
+    
+    let checkObj = { ...data, message: defaultMsg, points: 10, source: data.source || 'running' };
+    
+    if (checkObj.type === 'Type5Match') {
+        checkObj.mode = data.mode || 'device';
+        checkObj.password = data.password || '';
+        checkObj.username = data.username || '';
+    }
+
+    labs[currentLabIdx].checks.push(checkObj);
     renderChecks();
 }
 
@@ -656,56 +662,40 @@ function buildInitialSet(initialBlock) {
     });
 }
 
-function markEmptyFolders(container) {
-    let allUnchanged = true;
-    let hasItems = false;
-    
-    Array.from(container.children).forEach(child => {
-        if (child.classList.contains('tree-item')) {
-            hasItems = true;
-            const isStructural = child.classList.contains('type-folder') || 
-                                 child.classList.contains('type-block') || 
-                                 child.classList.contains('type-device');
-            
-            const subC = child.querySelector('.children');
-            
-            let subUnchanged = true;
-            let subHasItems = false;
-            
-            if (subC) {
-                const result = markEmptyFolders(subC);
-                subUnchanged = result.allUnchanged;
-                subHasItems = result.hasItems;
+function applyDiffVisibility(node) {
+    let allChildrenUnchanged = true;
+    let hasChildren = false;
+
+    const childrenContainer = node.querySelector(':scope > .children');
+    if (childrenContainer && childrenContainer.children.length > 0) {
+        hasChildren = true;
+        Array.from(childrenContainer.children).forEach(child => {
+            if (child.classList.contains('tree-item')) {
+                const childUnchanged = applyDiffVisibility(child);
+                if (!childUnchanged) allChildrenUnchanged = false;
             }
-            
-            if (isStructural) {
-                // Determine if this structural element has any changes inside it.
-                // If it has NO items inside, or ALL items are unchanged -> it is unchanged.
-                if (!subHasItems || subUnchanged) {
-                    child.classList.add('diff-unchanged');
-                } else {
-                    child.classList.remove('diff-unchanged');
-                    allUnchanged = false;
-                }
-            } else {
-                if (!child.classList.contains('diff-unchanged')) {
-                    allUnchanged = false;
-                }
-            }
+        });
+    }
+
+    if (hasChildren) {
+        if (allChildrenUnchanged) {
+            node.classList.add('diff-unchanged');
+            return true;
+        } else {
+            node.classList.remove('diff-unchanged');
+            return false;
         }
-    });
-    
-    return { allUnchanged, hasItems };
+    } else {
+        return node.classList.contains('diff-unchanged');
+    }
 }
 
 function getCheckDataForCommand(trimmed, devName, source, context) {
-    // Look for: enable secret 5 $1$...
     const enableMatch = trimmed.match(/^enable\s+secret\s+5\s+(?:\$1\$[^\s]+)/i);
     if (enableMatch) {
         return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
     }
-    // Look for: username <name> [privilege x] secret 5 $1$...
-    const userMatch = trimmed.match(/^username\s+(\S+)(?:\s+privilege\s+\d+)?\s+secret\s+5\s+(?:\$1\$[^\s]+)/i);
+    const userMatch = trimmed.match(/^username\s+([^\s]+).*secret\s+5\s+(?:\$1\$[^\s]+)/i);
     if (userMatch) {
         return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
     }
@@ -717,8 +707,12 @@ function setTab(mode) {
     document.getElementById('view-tree').style.display = mode === 'tree' ? 'block' : 'none';
     document.getElementById('treeToolbar').style.display = mode === 'tree' ? 'flex' : 'none';
     document.getElementById('view-raw').style.display = mode === 'raw' ? 'block' : 'none';
+    document.getElementById('view-settings').style.display = mode === 'settings' ? 'block' : 'none';
+    
     document.getElementById('tab-tree').className = mode === 'tree' ? 'tab active' : 'tab';
     document.getElementById('tab-raw').className = mode === 'raw' ? 'tab active' : 'tab';
+    document.getElementById('tab-settings').className = mode === 'settings' ? 'tab active' : 'tab';
+    
     if(mode === 'tree') document.getElementById('rawBackBtn').style.display = 'none';
 }
 
@@ -757,7 +751,11 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
         document.getElementById('sourceBadge').innerText = file.name;
 
         parseDevices(targetBlock);
-        markEmptyFolders(document.getElementById('treeRoot'));
+        readPKASettings(fullXmlText);
+        
+        const root = document.getElementById('treeRoot');
+        Array.from(root.children).forEach(devNode => applyDiffVisibility(devNode));
+        
     } catch (err) {
         alert(err.message);
         loader.innerText = "Error loading file.";
@@ -896,7 +894,9 @@ function createTreeItem(text, type, parent) {
 
     const row = document.createElement('div');
     row.className = 'tree-row';
-    row.innerHTML = `<span class="indicator"></span><span class="tree-text">${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span><div class="actions"></div>`;
+    
+    const safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    row.innerHTML = `<span class="indicator"></span><span class="tree-text">${safeText}</span><div class="actions"></div>`;
     div.appendChild(row);
 
     const children = document.createElement('div');
@@ -1056,18 +1056,81 @@ function toggleAllLocks(check) {
     document.querySelectorAll('.lock-cb').forEach(cb => cb.checked = check);
 }
 
+function togglePkaTimerInput() {
+    const mode = document.getElementById('pkaTimerMode').value;
+    document.getElementById('pkaTimeLimitContainer').style.display = mode === "1" ? 'block' : 'none';
+}
+
+function readPKASettings(xml) {
+    // 1. Read Locks
+    const lockRegex = /<NODE[^>]*on="(yes|no)"[^>]*>\s*<ID>([^<]+)<\/ID>/g;
+    let match;
+    const currentLocks = {};
+    while ((match = lockRegex.exec(xml)) !== null) {
+        currentLocks[match[2]] = (match[1] === "yes");
+    }
+    document.querySelectorAll('.lock-cb').forEach(cb => {
+        if (currentLocks[cb.value] !== undefined) {
+            cb.checked = currentLocks[cb.value];
+        } else {
+            cb.checked = false;
+        }
+    });
+
+    // 2. Read Timer settings
+    const typeMatch = xml.match(/TIMERTYPE="([^"]*)"/);
+    const timeMatch = xml.match(/COUNTDOWNMS="([^"]*)"/);
+    
+    const tMode = document.getElementById('pkaTimerMode');
+    const tLimit = document.getElementById('pkaTimeLimit');
+    
+    if (typeMatch && typeMatch[1] === "1") {
+        tMode.value = "1";
+        if (timeMatch && !isNaN(timeMatch[1])) {
+            tLimit.value = Math.floor(parseInt(timeMatch[1]) / 60000);
+        }
+    } else {
+        tMode.value = "0";
+        tLimit.value = "0";
+    }
+    togglePkaTimerInput();
+
+    // 3. Read Dynamic Feedback
+    const dynMatch = xml.match(/<DYNAMIC_PERCENTAGE_FEEDBACK\s+TYPE="([^"]*)">/);
+    const dfSelect = document.getElementById('pkaFeedbackMode');
+    if (dynMatch && dynMatch[1]) {
+        dfSelect.value = dynMatch[1];
+    } else {
+        dfSelect.value = "0";
+    }
+}
+
 async function exportModifiedPKA() {
     if (!fullXmlText) return alert("Please upload a PKA file first.");
     
+    const btn = document.getElementById('btnExportPka');
+    const originalText = btn.innerText;
+    btn.innerText = "⏳ Encrypting... Please Wait";
+    btn.disabled = true;
+
     const mode = document.getElementById('pkaTimerMode').value;
     const mins = parseInt(document.getElementById('pkaTimeLimit').value) || 0;
-    const locks = Array.from(document.querySelectorAll('.lock-cb:checked')).map(cb => cb.value);
+    const fbMode = parseInt(document.getElementById('pkaFeedbackMode').value) || 0;
+    
+    const locks = [];
+    const unlocks = [];
+    document.querySelectorAll('.lock-cb').forEach(cb => {
+        if (cb.checked) locks.push(cb.value);
+        else unlocks.push(cb.value);
+    });
 
     const payload = {
         xml: fullXmlText,
         timerType: parseInt(mode),
         timeMs: mins * 60 * 1000,
-        locks: locks
+        feedbackType: fbMode,
+        locks: locks,
+        unlocks: unlocks
     };
 
     try {
@@ -1092,5 +1155,8 @@ async function exportModifiedPKA() {
         document.body.removeChild(a);
     } catch (e) {
         alert("Export failed: " + e.message);
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 }
