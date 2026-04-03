@@ -3,6 +3,7 @@ const multer = require('multer');
 const zlib = require('zlib');
 const { decryptPKA, encryptPKA } = require('./src/crypto');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -35,6 +36,46 @@ app.post('/api/decrypt', upload.single('file'), (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Processing failed: " + err.message });
+    }
+});
+
+// Helper to empty out specific XML tags
+function clearTagContents(xml, tagName) {
+    const regex = new RegExp(`<${tagName}>[\\s\\S]*?<\\/${tagName}>`, 'g');
+    return xml.replace(regex, `<${tagName}></${tagName}>`);
+}
+
+app.post('/api/blank-network', (req, res) => {
+    try {
+        let { xml } = req.body;
+        if (!xml) return res.status(400).json({ error: "Missing XML data" });
+
+        const minimalPath = path.join(__dirname, 'minimal.xml');
+        if (!fs.existsSync(minimalPath)) {
+            return res.status(404).json({ error: "minimal.xml not found on server root." });
+        }
+        
+        const minimalXml = fs.readFileSync(minimalPath, 'utf8');
+
+        // Replace the LAST PACKETTRACER5 block (Answer Network)
+        const startIdx = xml.lastIndexOf("<PACKETTRACER5>");
+        const endIdx = xml.lastIndexOf("</PACKETTRACER5>");
+        
+        if (startIdx !== -1 && endIdx !== -1) {
+            xml = xml.substring(0, startIdx) + minimalXml + xml.substring(endIdx + 16);
+        } else {
+            return res.status(400).json({ error: "Could not locate answer network in XML" });
+        }
+
+        // Clear contents of grading logic elements
+        xml = clearTagContents(xml, 'ANSWER_TREE_CHECK_BOX');
+        xml = clearTagContents(xml, 'INITIALSETUP');
+        xml = clearTagContents(xml, 'COMPARISONS');
+
+        res.json({ xml: xml });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Processing failed: " + e.message });
     }
 });
 

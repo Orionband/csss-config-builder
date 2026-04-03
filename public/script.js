@@ -40,7 +40,11 @@ const lockableFeatures = [
 
 // ================= INIT & UTILS =================
 window.onload = () => {
-    toggleHelp();
+    if (!localStorage.getItem('csss_help_seen')) {
+        toggleHelp();
+        localStorage.setItem('csss_help_seen', 'true');
+    }
+    
     renderLabSelector();
     renderChecks();
     initLocks();
@@ -277,12 +281,12 @@ function renderChecks() {
 
         div.innerHTML = `
             <div class="check-header">
-                <input class="field-input" style="width:120px; font-weight:bold; color:${typeColor}" value="${c.device}" oninput="updateCheck(${i}, 'device', this.value)">
+                <input class="field-input" style="width:120px; font-weight:bold; color:${typeColor}" value="${(c.device||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'device', this.value)">
                 ${typeSelect}
                 <span class="remove-x" onclick="removeCheck(${i})">×</span>
             </div>
             <div class="settings-grid">
-                <div><label class="field-label">Message</label><input class="field-input" value="${c.message}" oninput="updateCheck(${i}, 'message', this.value)"></div>
+                <div><label class="field-label">Message</label><input class="field-input" value="${(c.message||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'message', this.value)"></div>
                 <div><label class="field-label">Points</label><input type="number" class="field-input" value="${c.points}" oninput="updateCheck(${i}, 'points', this.value)"></div>
             </div>
             
@@ -294,7 +298,7 @@ function renderChecks() {
                         <option value="startup" ${c.source==='startup'?'selected':''}>startup</option>
                     </select>
                 </div>
-                <div><label class="field-label">Context</label><input class="field-input" value="${c.context || 'global'}" oninput="updateCheck(${i}, 'context', this.value)"></div>
+                <div><label class="field-label">Context</label><input class="field-input" value="${(c.context || 'global').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'context', this.value)"></div>
             </div>` : ''}
 
             ${valueSectionHtml}
@@ -361,7 +365,7 @@ function genLab() {
                 }
                 out += `        password = "${(c.password || '').replace(/"/g, '\\"')}"\n\n`;
             } else {
-                out += `        source = "${c.source}"\n        context = "${c.context}"\n        value = "${c.value.replace(/"/g, '\\"')}"\n\n`;
+                out += `        source = "${c.source}"\n        context = "${c.context}"\n        value = "${(c.value||'').replace(/"/g, '\\"')}"\n\n`;
             }
         });
         out += "\n";
@@ -453,7 +457,7 @@ function renderQuestions() {
         div.innerHTML = `
             <div class="q-header"><span>Q${i+1}</span><span class="remove-x" onclick="removeQuestion(${i})">×</span></div>
             <div class="settings-grid">
-                <div><label class="field-label">Question Text</label><input class="field-input" value="${q.text}" oninput="updateQ(${i}, 'text', this.value)"></div>
+                <div><label class="field-label">Question Text</label><input class="field-input" value="${(q.text||'').replace(/"/g, '&quot;')}" oninput="updateQ(${i}, 'text', this.value)"></div>
                 <div><label class="field-label">Type</label>
                     <select class="field-input" onchange="updateQ(${i}, 'type', this.value)">
                         <option value="radio" ${q.type=='radio'?'selected':''}>Radio (Single)</option>
@@ -470,7 +474,7 @@ function renderQuestions() {
                 <div><label class="field-label">PKA Exhibit (Opt)</label><input class="field-input" placeholder="e.g. lab.pka" value="${q.pka||''}" oninput="updateQ(${i}, 'pka', this.value)"></div>
             </div>
 
-            <div><label class="field-label">Explanation</label><input class="field-input" value="${q.explanation||''}" oninput="updateQ(${i}, 'explanation', this.value)"></div>
+            <div><label class="field-label">Explanation</label><input class="field-input" value="${(q.explanation||'').replace(/"/g, '&quot;')}" oninput="updateQ(${i}, 'explanation', this.value)"></div>
             <div class="answer-list" id="q-answers-${i}"></div>
         `;
         list.appendChild(div);
@@ -497,7 +501,7 @@ function renderAnswers(qIdx, q) {
     container.innerHTML = '';
     
     if (q.type === 'text') {
-        container.innerHTML = `<div><label class="field-label">Regex Match</label><input class="field-input" value="${q.regex||''}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].regex=this.value; genQuiz()"></div>`;
+        container.innerHTML = `<div><label class="field-label">Regex Match</label><input class="field-input" value="${(q.regex||'').replace(/"/g, '&quot;')}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].regex=this.value; genQuiz()"></div>`;
         return;
     }
 
@@ -509,9 +513,9 @@ function renderAnswers(qIdx, q) {
             row.style.background = 'transparent';
             row.style.border = 'none';
             row.innerHTML = `
-                <input class="field-input" placeholder="Left" value="${pair.left}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].left=this.value; genQuiz()" style="width:45%; margin-right:5px;">
+                <input class="field-input" placeholder="Left" value="${(pair.left||'').replace(/"/g, '&quot;')}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].left=this.value; genQuiz()" style="width:45%; margin-right:5px;">
                 <span>=</span>
-                <input class="field-input" placeholder="Right" value="${pair.right}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].right=this.value; genQuiz()" style="width:45%; margin-left:5px;">
+                <input class="field-input" placeholder="Right" value="${(pair.right||'').replace(/"/g, '&quot;')}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].right=this.value; genQuiz()" style="width:45%; margin-left:5px;">
                 <button class="mini-btn" style="color:#f66; margin-left:5px;" onclick="removePair(${qIdx}, ${pIdx})">✖</button>
             `;
             container.appendChild(row);
@@ -532,7 +536,7 @@ function renderAnswers(qIdx, q) {
         const checkHandler = isRadio ? `setRadioCorrect(${qIdx}, ${aIdx})` : `quizzes[currentQuizIdx].questions[${qIdx}].answers[${aIdx}].correct=this.checked; genQuiz()`;
         row.innerHTML = `
             <div class="answer-check-col"><label class="custom-label ${isRadio ? 'radio' : ''}"><input type="checkbox" ${ans.correct ? 'checked' : ''} onchange="${checkHandler}"><span class="checkmark"></span></label></div>
-            <div class="answer-text-col"><input type="text" value="${ans.text}" placeholder="Answer Option..." oninput="quizzes[currentQuizIdx].questions[${qIdx}].answers[${aIdx}].text=this.value; genQuiz()"></div>
+            <div class="answer-text-col"><input type="text" value="${(ans.text||'').replace(/"/g, '&quot;')}" placeholder="Answer Option..." oninput="quizzes[currentQuizIdx].questions[${qIdx}].answers[${aIdx}].text=this.value; genQuiz()"></div>
             <button class="mini-btn" style="color:#f66; border:none; background:transparent;" onclick="removeAns(${qIdx}, ${aIdx})">✖</button>
         `;
         container.appendChild(row);
@@ -664,21 +668,35 @@ function buildInitialSet(initialBlock) {
 
 function applyDiffVisibility(node) {
     let allChildrenUnchanged = true;
-    let hasChildren = false;
+    let hasVisibleChildren = false;
 
     const childrenContainer = node.querySelector(':scope > .children');
     if (childrenContainer && childrenContainer.children.length > 0) {
-        hasChildren = true;
         Array.from(childrenContainer.children).forEach(child => {
             if (child.classList.contains('tree-item')) {
                 const childUnchanged = applyDiffVisibility(child);
-                if (!childUnchanged) allChildrenUnchanged = false;
+                if (!childUnchanged) {
+                    allChildrenUnchanged = false;
+                    hasVisibleChildren = true;
+                }
             }
         });
     }
 
-    if (hasChildren) {
-        if (allChildrenUnchanged) {
+    const isContainerOnly = node.classList.contains('type-folder') || node.classList.contains('type-device');
+    const isBlock = node.classList.contains('type-block');
+    const isSelfUnchanged = node.classList.contains('diff-unchanged');
+
+    if (isContainerOnly) {
+        if (allChildrenUnchanged && !hasVisibleChildren) {
+            node.classList.add('diff-unchanged');
+            return true;
+        } else {
+            node.classList.remove('diff-unchanged');
+            return false;
+        }
+    } else if (isBlock) {
+        if (allChildrenUnchanged && !hasVisibleChildren && isSelfUnchanged) {
             node.classList.add('diff-unchanged');
             return true;
         } else {
@@ -686,18 +704,18 @@ function applyDiffVisibility(node) {
             return false;
         }
     } else {
-        return node.classList.contains('diff-unchanged');
+        return isSelfUnchanged;
     }
 }
 
 function getCheckDataForCommand(trimmed, devName, source, context) {
-    const enableMatch = trimmed.match(/^enable\s+secret\s+5\s+(?:\$1\$[^\s]+)/i);
-    if (enableMatch) {
+    // Only auto-map type 5 hashes (MD5) which begin with $1$
+    if (trimmed.startsWith("enable secret 5 $1$")) {
         return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
     }
-    const userMatch = trimmed.match(/^username\s+([^\s]+).*secret\s+5\s+(?:\$1\$[^\s]+)/i);
-    if (userMatch) {
-        return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
+    if (trimmed.startsWith("username ") && trimmed.includes(" secret 5 $1$")) {
+        const userMatch = trimmed.match(/^username\s+(\S+)/i);
+        return { type:'Type5Match', mode:'user', username: userMatch ? userMatch[1] : '', password:'', device:devName, context:context, source:source, value:trimmed };
     }
     return { type:'ConfigMatch', device:devName, context:context, value:trimmed, source:source };
 }
@@ -857,6 +875,7 @@ function parseXML(node, container, devName, path) {
     const children = Array.from(node.children);
     if(children.length === 0) {
         const val = node.textContent;
+        // Don't add blank xml nodes
         if(val && val.trim()) {
             const item = createTreeItem(`${node.tagName}: ${val}`, "leaf", container);
             const cleanPath = path.filter(p => p !== "ENGINE");
@@ -1042,11 +1061,14 @@ function downloadXML() {
 // ================= SETTINGS EXPORT =================
 function initLocks() {
     const grid = document.getElementById('lockGrid');
+    if (!grid) return;
     grid.innerHTML = '';
+    
     lockableFeatures.forEach(feat => {
         const lbl = document.createElement('label');
         lbl.className = 'custom-label';
         lbl.style.marginBottom = "5px";
+        
         lbl.innerHTML = `<input type="checkbox" value="${feat}" class="lock-cb"><span class="checkmark"></span> <span style="margin-left: 5px">${feat}</span>`;
         grid.appendChild(lbl);
     });
@@ -1102,6 +1124,51 @@ function readPKASettings(xml) {
         dfSelect.value = dynMatch[1];
     } else {
         dfSelect.value = "0";
+    }
+}
+
+async function replaceAnswerNetwork() {
+    if (!fullXmlText) return alert("Please upload a PKA file first.");
+    if (!confirm("Are you sure you want to replace the answer network with a blank network? This will remove all grading targets from the PKA file itself.")) return;
+    
+    const btn = document.getElementById('btnReplaceNetwork');
+    const originalText = btn.innerText;
+    btn.innerText = "⏳ Processing... Please Wait";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/blank-network', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ xml: fullXmlText })
+        });
+        
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Failed to process blank network");
+        }
+        
+        const data = await res.json();
+        fullXmlText = data.xml;
+        
+        document.getElementById('rawContent').innerText = fullXmlText;
+        updateLineNumbers(fullXmlText);
+        alert("Answer network successfully replaced with a blank network.");
+        
+        // Reparse tree
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(fullXmlText, "text/xml");
+        const ptBlocks = xmlDoc.querySelectorAll("PACKETTRACER5");
+        if(ptBlocks.length > 0) {
+            parseDevices(ptBlocks[ptBlocks.length - 1]);
+            const root = document.getElementById('treeRoot');
+            Array.from(root.children).forEach(devNode => applyDiffVisibility(devNode));
+        }
+    } catch (err) {
+        alert("Error: " + err.message);
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 }
 

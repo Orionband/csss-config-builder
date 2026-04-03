@@ -12,36 +12,53 @@
 <div id="helpModal" class="modal">
     <div class="modal-content">
         <span class="modal-close" onclick="toggleHelp()">×</span>
-        <h2>CSSS Builder Documentation</h2>
-        
-        <h3>1. Lab Workflow</h3>
+        <h2>How to Use CSSS Builder</h2>
+
+        <h3>Quick Start</h3>
+        <ol>
+            <li>Click <b>Open .pka</b> in the top-right to load your Packet Tracer activity file.</li>
+            <li>The <b>Tree View</b> (left pane) will populate with your devices and their configurations.</li>
+            <li>Browse to any config line, then click <span style="color:var(--accent)">+ Add</span> to create a grading check for it.</li>
+            <li>The generated <code>lab.conf</code> output appears in the bottom-right panel. Copy it to your server.</li>
+            <li>Use <b>PKA Settings</b> to configure locks and timers, then click <b>Download Modified PKA</b> for student distribution.</li>
+        </ol>
+
+        <h3>Lab Builder</h3>
         <ul>
-            <li>Import the Packet Tracer file (.pka). <b>Must contain the Answer Network.</b></li>
-            <li>Use the Tree View to find configurations.</li>
-            <li>Click <span style="color:var(--accent)">+ Add</span> to create a grading check.</li>
+            <li><b>Tree View:</b> Expands each device's parsed configuration. Click any node to inspect its value. Click <span style="color:var(--accent)">+ Add</span> to add it as a grading check in the right pane.</li>
+            <li><b>Show Differences Only:</b> Hides elements that are identical between the Initial and Answer networks. Use this to quickly find what was configured in the answer key.</li>
+            <li><b>Raw XML:</b> Shows the full unprocessed XML from the PKA. Click the <code>&lt;&gt;</code> icon on any tree node to jump to that element's position in the raw XML.</li>
+            <li><b>Lab Selector:</b> Manage multiple labs in a single session. Use <b>+ Add Lab</b> to create a new one and configure its metadata (ID, title, limits, etc.).</li>
+            <li><b>Manual Check:</b> Add a check without selecting from the tree. Useful when you know the config path already.</li>
         </ul>
 
-        <h3>2. Check Types</h3>
-        <p>Use the dropdown in the check card to select logic. "Not" versions invert the check (Fail if found).</p>
+        <h3>Check Types</h3>
         <ul>
-            <li><b>ConfigMatch / Not:</b> Exact string match (e.g., <code>hostname R1</code>).</li>
-            <li><b>ConfigRegex / Not:</b> Pattern match (e.g., <code>^enable secret 5 .*</code>).</li>
-            <li><b>XmlMatch / Not:</b> Hardware attributes (e.g., <code>Model</code>).</li>
-            <li><b>XmlRegex / Not:</b> Pattern match for XML values.</li>
-            <li><b>Type5Match / Not:</b> Validates Cisco Type 5 (MD5) hashes directly from the config. Supports Device (`enable secret`) and User modes.</li>
+            <li><b>ConfigMatch:</b> Exact string match against the device running config.</li>
+            <li><b>ConfigRegex:</b> Regex pattern match against the running config.</li>
+            <li><b>XmlMatch:</b> Exact match on a hardware/topology XML attribute.</li>
+            <li><b>XmlRegex:</b> Regex match on an XML attribute value.</li>
+            <li><b>Type5Match:</b> Validates a Cisco MD5 password hash without needing the salt. Use <b>Device</b> mode for <code>enable secret</code>, <b>User</b> mode for <code>username secret</code>.</li>
+        </ul>
+        <p style="color:var(--text-dim); font-size:0.9em;">Appending <b>Not</b> to any check type (e.g., <code>ConfigMatchNot</code>) inverts the result. The check passes only if the condition is not found.</p>
+
+        <h3>Quiz Builder</h3>
+        <ul>
+            <li>Switch to <b>Quiz Builder</b> in the top nav. Click <b>+ Create</b> to start a new quiz.</li>
+            <li>Click <b>+ Add Question</b> to insert questions. Supported types: <b>Text</b> (with optional Regex matching), <b>Multiple Choice</b>, and <b>Matching</b> (drag-and-drop).</li>
+            <li>To attach an image or PKA file to a question, use the <b>Exhibit</b> option on that question row.</li>
+            <li>Copy the <code>quiz.conf</code> output to your server when done.</li>
         </ul>
 
-        <h3>3. PKA Settings & Export</h3>
+        <h3>PKA Settings & Export</h3>
         <ul>
-            <li>Use the <b>PKA Settings</b> tab (in Lab Builder mode) to lock elements, set timers, set feedback type, and clear old user tracking out of the XML.</li>
-            <li>Download the re-encrypted `.pka` directly to deploy to your students.</li>
+            <li><b>Timer Mode:</b> Set to <b>Countdown</b> and specify a time limit to enforce a deadline directly in the Packet Tracer client.</li>
+            <li><b>Dynamic Feedback:</b> Controls what score information, if any, students see during the activity.</li>
+            <li><b>Lockable Features:</b> Restrict access to Delete Tool, Check Results, CLI access, and other features.</li>
+            <li><b>Replace:</b> Replaces the answer network with a blank one as well as deleting checked items by the activity wizard.</li>
+            <li><b>Download Modified PKA:</b> Exports the PKA with all settings applied.</li>
         </ul>
 
-        <div class="warning-box">
-            <span class="warning-title">Anti-Cheat</span>
-            <p>Ensure you delete the answer network from the PKA file before giving it to students.</p>
-        </div>
-        
         <div style="text-align:center; margin-top:20px;">
             <button class="btn" onclick="toggleHelp()">Close</button>
         </div>
@@ -88,6 +105,7 @@
                 <div class="tab" onclick="setTab('settings')" id="tab-settings">PKA Settings</div>
             </div>
             
+            <!-- TREE TOOLBAR -->
             <div class="pane-toolbar" id="treeToolbar">
                 <div class="search-wrapper">
                     <input type="text" class="search-bar" id="searchBox" placeholder="Search config..." onkeyup="filterTree()">
@@ -97,6 +115,7 @@
                 <button class="btn btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="expandAll(false)">Collapse</button>
             </div>
 
+            <!-- TREE VIEW -->
             <div class="scroll-area" id="view-tree">
                 <div style="text-align:center; padding:40px; color:#666;" id="loadingText">
                     Upload a PKA file to begin.
@@ -151,7 +170,8 @@
                     <!-- Filled via JS -->
                 </div>
                 
-                <div style="position: sticky; bottom: 0; background: #1a1a1a; padding: 10px 0; border-top: 1px solid #333; text-align: center;">
+                <div style="position: sticky; bottom: 0; background: #1a1a1a; padding: 10px 0; border-top: 1px solid #333; text-align: center; display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn btn-outline" id="btnReplaceNetwork" style="width: 100%; padding: 10px; font-size: 0.9rem;" onclick="replaceAnswerNetwork()">Replace answer network with blank network</button>
                     <button class="btn" id="btnExportPka" style="width: 100%; padding: 12px; font-size: 1rem;" onclick="exportModifiedPKA()">⬇ Download Modified PKA</button>
                 </div>
             </div>
@@ -269,7 +289,6 @@
             </div>
         </div>
     </div>
-
 </div>
 
 <script src="script.js"></script>
