@@ -202,6 +202,7 @@ function renderChecks() {
         const types = [
             "ConfigMatch", "ConfigMatchNot", 
             "ConfigRegex", "ConfigRegexNot",
+            "Type5Match", "Type5MatchNot",
             "XmlMatch", "XmlMatchNot", 
             "XmlRegex", "XmlRegexNot"
         ];
@@ -215,7 +216,7 @@ function renderChecks() {
             <div class="check-header">
                 <input class="field-input" style="width:120px; font-weight:bold; color:${typeColor}" value="${c.device}" oninput="updateCheck(${i}, 'device', this.value)">
                 ${typeSelect}
-                <span class="remove-x" onclick="removeCheck(${i})">×</span>
+                <span class="remove-x" onclick="removeCheck(${i})"> </span>
             </div>
             <div class="settings-grid">
                 <div><label class="field-label">Message</label><input class="field-input" value="${c.message}" oninput="updateCheck(${i}, 'message', this.value)"></div>
