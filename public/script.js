@@ -181,7 +181,9 @@ function updateLabMeta() {
 }
 
 function addCheck(data) {
-    labs[currentLabIdx].checks.push({ ...data, message: `Check ${data.value}`, points: 10, source: 'running' });
+    let defaultMsg = `Check ${data.value}`;
+    if (defaultMsg.length > 40) defaultMsg = defaultMsg.substring(0, 40) + '...';
+    labs[currentLabIdx].checks.push({ ...data, message: defaultMsg, points: 10, source: data.source || 'running' });
     renderChecks();
 }
 
@@ -608,14 +610,18 @@ function buildInitialSet(initialBlock) {
 
         function traverse(n, path) {
             if(n.tagName === "RUNNINGCONFIG" || n.tagName === "STARTUPCONFIG") return;
+            
+            const cleanPath = path.filter(p => p !== "ENGINE");
+            
             if(n.hasAttributes()) {
                 for(let i=0; i<n.attributes.length; i++) {
-                    set.add(`attr::${path.join('.')}::${n.attributes[i].name}::${n.attributes[i].value}`);
+                    const attrPath = [...cleanPath, "$", n.attributes[i].name];
+                    set.add(`attr::${attrPath.join('.')}::${n.attributes[i].name}::${n.attributes[i].value}`);
                 }
             }
             const children = Array.from(n.children);
             if(children.length === 0) {
-                if(n.textContent.trim()) set.add(`xml::${path.join('.')}::${n.textContent.trim()}`);
+                if(n.textContent.trim()) set.add(`xml::${cleanPath.join('.')}::${n.textContent.trim()}`);
             } else {
                 const groups = {};
                 children.forEach(c => { if(!groups[c.tagName]) groups[c.tagName]=[]; groups[c.tagName].push(c); });
@@ -642,16 +648,26 @@ function markEmptyFolders(container) {
             
             const subC = child.querySelector('.children');
             
-            if (isStructural && subC) {
-                // Check contents recursively. An empty folder is "unchanged".
-                const subUnchanged = markEmptyFolders(subC);
-                if (subUnchanged) {
-                    child.classList.add('diff-unchanged');
-                }
+            let subUnchanged = true;
+            if (subC && subC.children.length > 0) {
+                subUnchanged = markEmptyFolders(subC);
             }
             
-            if (!child.classList.contains('diff-unchanged')) {
-                allUnchanged = false;
+            if (isStructural) {
+                const headerUnchanged = child.classList.contains('type-folder') || 
+                                        child.classList.contains('type-device') || 
+                                        child.classList.contains('diff-unchanged');
+                
+                if (subUnchanged && headerUnchanged) {
+                    child.classList.add('diff-unchanged');
+                } else {
+                    child.classList.remove('diff-unchanged');
+                    allUnchanged = false;
+                }
+            } else {
+                if (!child.classList.contains('diff-unchanged')) {
+                    allUnchanged = false;
+                }
             }
         }
     });
@@ -659,11 +675,12 @@ function markEmptyFolders(container) {
 }
 
 function getCheckDataForCommand(trimmed, devName, source, context) {
-    const enableMatch = trimmed.match(/^enable\s+secret\s+5\s+\$1\$.+$/i);
-    if (enableMatch) {
+    // Check for Type 5 enable secret
+    if (/^enable\s+secret\s+5\s+\$1\$/i.test(trimmed)) {
         return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
     }
-    const userMatch = trimmed.match(/^username\s+(\S+)(?:\s+privilege\s+\d+)?\s+secret\s+5\s+\$1\$.+$/i);
+    // Check for Type 5 user secret
+    const userMatch = trimmed.match(/^username\s+([^ ]+).*secret\s+5\s+\$1\$/i);
     if (userMatch) {
         return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
     }
@@ -770,13 +787,16 @@ function parseIOS(lines, container, devName, source) {
             if(trimmed.startsWith('interface') || trimmed.startsWith('router') || trimmed.startsWith('line')) {
                 blockContext = trimmed;
                 blockUI = createTreeItem(trimmed, "block", container);
-                addActions(blockUI, { type:'ConfigMatch', device:devName, context:'global', value:trimmed, source:source });
+                if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
+                    blockUI.element.classList.add('diff-unchanged');
+                }
+                const checkData = getCheckDataForCommand(trimmed, devName, source, 'global');
+                addActions(blockUI, checkData);
             } else {
                 const cmdUI = createTreeItem(trimmed, "cmd", container);
                 if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
                     cmdUI.element.classList.add('diff-unchanged');
                 }
-                
                 const checkData = getCheckDataForCommand(trimmed, devName, source, 'global');
                 addActions(cmdUI, checkData);
             }
@@ -786,7 +806,6 @@ function parseIOS(lines, container, devName, source) {
             if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
                 cmdUI.element.classList.add('diff-unchanged');
             }
-            
             const checkData = getCheckDataForCommand(trimmed, devName, source, blockContext);
             addActions(cmdUI, checkData);
         }
