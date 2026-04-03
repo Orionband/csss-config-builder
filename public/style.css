@@ -1,4 +1,5 @@
-﻿:root { --bg: #101010; --card: #262626; --accent: #f05d5e; --text: #f1f2eb; --border: #333; --input-bg: #1a1a1a; }
+﻿===== C:\Users\MarcT\OneDrive\projects\csss-config-builder\public\style.css =====
+:root { --bg: #101010; --card: #262626; --accent: #f05d5e; --text: #f1f2eb; --border: #333; --input-bg: #1a1a1a; }
 * { scrollbar-width: thin; scrollbar-color: var(--accent) var(--bg); box-sizing: border-box; }
 ::-webkit-scrollbar { width: 8px; height: 8px; } 
 ::-webkit-scrollbar-track { background: var(--bg); }
@@ -54,6 +55,9 @@ input[type="file"] { position: absolute; left: 0; top: 0; opacity: 0; width: 100
 .type-leaf { color: #66d9ef; }
 .type-attr { color: #fd971f; }
 .type-folder { color: #d4d4d4; }
+
+/* DIFF MODE (Show Differences Only) */
+.diff-mode .diff-unchanged { display: none !important; }
 
 .actions { margin-left: auto; display: flex; gap: 5px; opacity: 0; transition: opacity 0.1s; }
 .tree-row:hover .actions { opacity: 1; }

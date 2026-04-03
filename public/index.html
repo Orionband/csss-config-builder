@@ -28,7 +28,7 @@
             <li><b>ConfigRegex / Not:</b> Pattern match (e.g., <code>^enable secret 5 .*</code>).</li>
             <li><b>XmlMatch / Not:</b> Hardware attributes (e.g., <code>Model</code>).</li>
             <li><b>XmlRegex / Not:</b> Pattern match for XML values.</li>
-			<li><b>Type5Match / Not:</b> Plaintext password validation against Cisco Type 5 MD5 Hashes. Input the plaintext password into the value field.</li>
+            <li><b>Type5Match / Not:</b> Validates Cisco Type 5 (MD5) hashes directly from the config without storing the salt manually. Supports Device (`enable secret`) and User modes.</li>
         </ul>
 
         <h3>3. Quiz Workflow</h3>
@@ -63,6 +63,10 @@
     </div>
     
     <div id="headerLabControls" style="display:flex; gap:10px; align-items:center;">
+        <label class="custom-label" style="margin-right: 15px; color: var(--text);">
+            <input type="checkbox" id="diffToggle" onchange="toggleDiff(this.checked)">
+            <span class="checkmark"></span> Show Differences Only
+        </label>
         <div id="sourceBadge" class="badge">No PKA Loaded</div>
         <div class="upload-zone btn">
             📂 Open .pka
@@ -109,7 +113,7 @@
                     <div id="lineNumbers" class="line-numbers"></div>
                     <div id="rawContent" class="raw-content"></div>
                 </div>
-                <div class="floating-back" id="rawBackBtn" onclick="setTab('tree')">⬅ Back to Tree</div>
+                <div class="floating-back" id="rawBackBtn" onclick="setTab('tree')">← Back to Tree</div>
             </div>
         </div>
 

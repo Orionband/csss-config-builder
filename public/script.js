@@ -22,6 +22,8 @@ let currentLabIdx = 0;
 let quizzes = [];
 let currentQuizIdx = -1;
 
+let initialSet = {};
+
 // ================= INIT & UTILS =================
 window.onload = () => {
     toggleHelp();
@@ -85,6 +87,15 @@ function copyToClipboard(type) {
     copyText.select();
     document.execCommand("copy");
     alert("Copied config!");
+}
+
+function toggleDiff(checked) {
+    const root = document.getElementById('treeRoot');
+    if (checked) {
+        root.classList.add('diff-mode');
+    } else {
+        root.classList.remove('diff-mode');
+    }
 }
 
 // ================= LAB LOGIC =================
@@ -197,14 +208,15 @@ function renderChecks() {
         const div = document.createElement('div');
         div.className = 'check-card';
         const isXml = c.type.startsWith('Xml');
-        const typeColor = isXml ? '#66d9ef' : '#a6e22e';
+        const isType5 = c.type.startsWith('Type5Match');
+        const typeColor = isXml ? '#66d9ef' : (isType5 ? '#ff66d9' : '#a6e22e');
 
         const types = [
             "ConfigMatch", "ConfigMatchNot", 
             "ConfigRegex", "ConfigRegexNot",
-            "Type5Match", "Type5MatchNot",
             "XmlMatch", "XmlMatchNot", 
-            "XmlRegex", "XmlRegexNot"
+            "XmlRegex", "XmlRegexNot",
+            "Type5Match", "Type5MatchNot"
         ];
         
         let typeOpts = types.map(t => `<option value="${t}" ${c.type===t?'selected':''}>${t}</option>`).join('');
@@ -212,11 +224,36 @@ function renderChecks() {
 
         const isSourceVisible = !isXml;
 
+        let valueSectionHtml = '';
+        if (isType5) {
+            valueSectionHtml = `
+                <div class="settings-grid">
+                    <div><label class="field-label">Mode</label>
+                        <select class="field-input" onchange="updateCheck(${i}, 'mode', this.value)">
+                            <option value="device" ${c.mode==='device'?'selected':''}>Device (enable secret)</option>
+                            <option value="user" ${c.mode==='user'?'selected':''}>User (username secret)</option>
+                        </select>
+                    </div>
+                    <div><label class="field-label">Plaintext Password</label><input class="field-input" value="${(c.password||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'password', this.value)"></div>
+                </div>
+                ${c.mode === 'user' ? `
+                <div class="settings-grid">
+                    <div><label class="field-label">Username</label><input class="field-input" value="${(c.username||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'username', this.value)"></div>
+                    <div></div>
+                </div>
+                ` : ''}
+            `;
+        } else {
+            valueSectionHtml = `
+                <div><label class="field-label">Value</label><input class="field-input" value="${(c.value||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'value', this.value)"></div>
+            `;
+        }
+
         div.innerHTML = `
             <div class="check-header">
                 <input class="field-input" style="width:120px; font-weight:bold; color:${typeColor}" value="${c.device}" oninput="updateCheck(${i}, 'device', this.value)">
                 ${typeSelect}
-                <span class="remove-x" onclick="removeCheck(${i})"> </span>
+                <span class="remove-x" onclick="removeCheck(${i})">×</span>
             </div>
             <div class="settings-grid">
                 <div><label class="field-label">Message</label><input class="field-input" value="${c.message}" oninput="updateCheck(${i}, 'message', this.value)"></div>
@@ -234,7 +271,7 @@ function renderChecks() {
                 <div><label class="field-label">Context</label><input class="field-input" value="${c.context || 'global'}" oninput="updateCheck(${i}, 'context', this.value)"></div>
             </div>` : ''}
 
-            <div><label class="field-label">Value</label><input class="field-input" value="${c.value.replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'value', this.value)"></div>
+            ${valueSectionHtml}
         `;
         list.appendChild(div);
     });
@@ -242,9 +279,22 @@ function renderChecks() {
 }
 
 function updateCheck(idx, key, val) {
-    labs[currentLabIdx].checks[idx][key] = val;
-    if(key === 'type') renderChecks(); 
-    else genLab();
+    const c = labs[currentLabIdx].checks[idx];
+    c[key] = val;
+    if(key === 'type') {
+        if (val.startsWith('Type5Match') && !c.mode) {
+            c.mode = 'device';
+            c.password = '';
+            c.username = '';
+        }
+        renderChecks(); 
+    } 
+    else if (key === 'mode') {
+        renderChecks();
+    }
+    else {
+        genLab();
+    }
 }
 function removeCheck(idx) {
     labs[currentLabIdx].checks.splice(idx, 1);
@@ -273,9 +323,17 @@ function genLab() {
         l.checks.forEach(c => {
             out += `    [[labs.checks]]\n    message = "${c.message}"\n    points = ${c.points}\n    device = "${c.device}"\n`;
             out += `        [[labs.checks.pass]]\n        type = "${c.type}"\n`;
+            
             if(c.type.startsWith('Xml')) {
                 const pathArr = c.path ? JSON.parse(c.path).map(s => `"${s}"`).join(', ') : '';
                 out += `        path = [${pathArr}]\n        value = "${c.value}"\n\n`;
+            } else if (c.type.startsWith('Type5Match')) {
+                out += `        source = "${c.source}"\n        context = "${c.context || 'global'}"\n`;
+                out += `        mode = "${c.mode || 'device'}"\n`;
+                if ((c.mode || 'device') === 'user') {
+                    out += `        username = "${c.username || ''}"\n`;
+                }
+                out += `        password = "${(c.password || '').replace(/"/g, '\\"')}"\n\n`;
             } else {
                 out += `        source = "${c.source}"\n        context = "${c.context}"\n        value = "${c.value.replace(/"/g, '\\"')}"\n\n`;
             }
@@ -428,7 +486,7 @@ function renderAnswers(qIdx, q) {
                 <input class="field-input" placeholder="Left" value="${pair.left}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].left=this.value; genQuiz()" style="width:45%; margin-right:5px;">
                 <span>=</span>
                 <input class="field-input" placeholder="Right" value="${pair.right}" oninput="quizzes[currentQuizIdx].questions[${qIdx}].pairs[${pIdx}].right=this.value; genQuiz()" style="width:45%; margin-left:5px;">
-                <button class="mini-btn" style="color:#f66; margin-left:5px;" onclick="removePair(${qIdx}, ${pIdx})">×</button>
+                <button class="mini-btn" style="color:#f66; margin-left:5px;" onclick="removePair(${qIdx}, ${pIdx})">✖</button>
             `;
             container.appendChild(row);
         });
@@ -449,7 +507,7 @@ function renderAnswers(qIdx, q) {
         row.innerHTML = `
             <div class="answer-check-col"><label class="custom-label ${isRadio ? 'radio' : ''}"><input type="checkbox" ${ans.correct ? 'checked' : ''} onchange="${checkHandler}"><span class="checkmark"></span></label></div>
             <div class="answer-text-col"><input type="text" value="${ans.text}" placeholder="Answer Option..." oninput="quizzes[currentQuizIdx].questions[${qIdx}].answers[${aIdx}].text=this.value; genQuiz()"></div>
-            <button class="mini-btn" style="color:#f66; border:none; background:transparent;" onclick="removeAns(${qIdx}, ${aIdx})">×</button>
+            <button class="mini-btn" style="color:#f66; border:none; background:transparent;" onclick="removeAns(${qIdx}, ${aIdx})">✖</button>
         `;
         container.appendChild(row);
     });
@@ -529,6 +587,70 @@ function jumpToRaw(text) {
     }
 }
 
+// ================= INITIAL NETWORK DIFFERENCE LOGIC =================
+function buildInitialSet(initialBlock) {
+    initialSet = {};
+    if (!initialBlock) return;
+    
+    const devices = initialBlock.querySelectorAll("NETWORK > DEVICES > DEVICE");
+    devices.forEach(dev => {
+        const engine = dev.querySelector("ENGINE");
+        if (!engine) return;
+        const name = engine.querySelector("NAME")?.textContent || "Unknown";
+        const set = new Set();
+        initialSet[name] = set;
+
+        const rc = engine.querySelector("RUNNINGCONFIG");
+        if(rc) rc.querySelectorAll("LINE").forEach(l => set.add(`running::${l.textContent.trim()}`));
+
+        const sc = engine.querySelector("STARTUPCONFIG");
+        if(sc) sc.querySelectorAll("LINE").forEach(l => set.add(`startup::${l.textContent.trim()}`));
+
+        function traverse(n, path) {
+            if(n.tagName === "RUNNINGCONFIG" || n.tagName === "STARTUPCONFIG") return;
+            if(n.hasAttributes()) {
+                for(let i=0; i<n.attributes.length; i++) {
+                    set.add(`attr::${path.join('.')}::${n.attributes[i].name}::${n.attributes[i].value}`);
+                }
+            }
+            const children = Array.from(n.children);
+            if(children.length === 0) {
+                if(n.textContent.trim()) set.add(`xml::${path.join('.')}::${n.textContent.trim()}`);
+            } else {
+                const groups = {};
+                children.forEach(c => { if(!groups[c.tagName]) groups[c.tagName]=[]; groups[c.tagName].push(c); });
+                for(const [tag, nodes] of Object.entries(groups)) {
+                    nodes.forEach((child, idx) => {
+                        const nextPath = [...path, tag];
+                        if(nodes.length > 1) nextPath.push(idx.toString());
+                        traverse(child, nextPath);
+                    });
+                }
+            }
+        }
+        traverse(engine, []);
+    });
+}
+
+function markEmptyFolders(container) {
+    let allUnchanged = true;
+    let hasItems = false;
+    Array.from(container.children).forEach(child => {
+        if (child.classList.contains('tree-item')) {
+            hasItems = true;
+            const subC = child.querySelector('.children');
+            if (subC && subC.children.length > 0) {
+                const subUnchanged = markEmptyFolders(subC);
+                if (subUnchanged) child.classList.add('diff-unchanged');
+            }
+            if (!child.classList.contains('diff-unchanged')) {
+                allUnchanged = false;
+            }
+        }
+    });
+    return hasItems && allUnchanged;
+}
+
 // ================= FILE & PARSING =================
 function setTab(mode) {
     document.getElementById('view-tree').style.display = mode === 'tree' ? 'block' : 'none';
@@ -565,11 +687,16 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
         const ptBlocks = xmlDoc.querySelectorAll("PACKETTRACER5");
         if(ptBlocks.length === 0) throw new Error("Invalid XML");
         
-        const targetBlock = ptBlocks[ptBlocks.length - 1];
+        const targetBlock = ptBlocks[ptBlocks.length - 1]; // Answer Network
+        const initialBlock = ptBlocks.length > 1 ? ptBlocks[0] : null; // Initial Network
+        
+        buildInitialSet(initialBlock);
+
         document.getElementById('sourceBadge').className = "badge success";
         document.getElementById('sourceBadge').innerText = file.name;
 
         parseDevices(targetBlock);
+        markEmptyFolders(document.getElementById('treeRoot'));
     } catch (err) {
         alert(err.message);
         loader.innerText = "Error loading file.";
@@ -627,17 +754,22 @@ function parseIOS(lines, container, devName, source) {
                 addActions(blockUI, { type:'ConfigMatch', device:devName, context:'global', value:trimmed, source:source });
             } else {
                 const cmdUI = createTreeItem(trimmed, "cmd", container);
+                if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
+                    cmdUI.element.classList.add('diff-unchanged');
+                }
                 addActions(cmdUI, { type:'ConfigMatch', device:devName, context:'global', value:trimmed, source:source });
             }
         } else if (blockUI) {
             const trimmed = txt.trim();
             const cmdUI = createTreeItem(trimmed, "cmd", blockUI.childrenContainer);
+            if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
+                cmdUI.element.classList.add('diff-unchanged');
+            }
             addActions(cmdUI, { type:'ConfigMatch', device:devName, context:blockContext, value:trimmed, source:source });
         }
     });
 }
 
-// FIX: Prevent double tagging and output cleaner paths.
 function parseXML(node, container, devName, path) {
     if(node.tagName === "RUNNINGCONFIG" || node.tagName === "STARTUPCONFIG") return;
     
@@ -647,6 +779,10 @@ function parseXML(node, container, devName, path) {
             const item = createTreeItem(`@${attr.name}: ${attr.value}`, "attr", container);
             const cleanPath = path.filter(p => p !== "ENGINE");
             cleanPath.push("$", attr.name);
+            
+            const attrKey = `attr::${cleanPath.join('.')}::${attr.name}::${attr.value}`;
+            if (initialSet[devName] && initialSet[devName].has(attrKey)) item.element.classList.add('diff-unchanged');
+
             addActions(item, { type:'XmlMatch', device:devName, path:JSON.stringify(cleanPath), value:attr.value }, attr.value);
         }
     }
@@ -657,7 +793,10 @@ function parseXML(node, container, devName, path) {
         if(val && val.trim()) {
             const item = createTreeItem(`${node.tagName}: ${val}`, "leaf", container);
             const cleanPath = path.filter(p => p !== "ENGINE");
-            // DO NOT append the node.tagName again because the parent already added it to 'path'.
+            
+            const valKey = `xml::${cleanPath.join('.')}::${val.trim()}`;
+            if (initialSet[devName] && initialSet[devName].has(valKey)) item.element.classList.add('diff-unchanged');
+
             addActions(item, { type:'XmlMatch', device:devName, path:JSON.stringify(cleanPath), value:val }, val);
         }
     } else {
@@ -671,7 +810,6 @@ function parseXML(node, container, devName, path) {
                 if(nodes.length > 0 || child.children.length > 0 || child.hasAttributes()) addExpandSubtreeBtn(branch);
                 
                 const nextPath = [...path, tag];
-                // Only append index if there are multiple elements of the same type.
                 if (nodes.length > 1) {
                     nextPath.push(idx.toString());
                 }
@@ -742,7 +880,7 @@ function addActions(uiObj, checkData, rawValueForSearch) {
 
     const revealBtn = document.createElement('span');
     revealBtn.className = 'mini-btn reveal-btn';
-    revealBtn.innerText = '👁️';
+    revealBtn.innerText = '⌖';
     revealBtn.title = "Jump to location";
     revealBtn.style.display = 'none'; 
     revealBtn.onclick = () => revealInTree(uiObj);
