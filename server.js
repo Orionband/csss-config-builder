@@ -39,7 +39,6 @@ app.post('/api/decrypt', upload.single('file'), (req, res) => {
     }
 });
 
-// Helper to empty out specific XML tags
 function clearTagContents(xml, tagName) {
     const regex = new RegExp(`<${tagName}>[\\s\\S]*?<\\/${tagName}>`, 'g');
     return xml.replace(regex, `<${tagName}></${tagName}>`);
@@ -57,7 +56,6 @@ app.post('/api/blank-network', (req, res) => {
         
         const minimalXml = fs.readFileSync(minimalPath, 'utf8');
 
-        // Replace the LAST PACKETTRACER5 block (Answer Network)
         const startIdx = xml.lastIndexOf("<PACKETTRACER5>");
         const endIdx = xml.lastIndexOf("</PACKETTRACER5>");
         
@@ -67,7 +65,6 @@ app.post('/api/blank-network', (req, res) => {
             return res.status(400).json({ error: "Could not locate answer network in XML" });
         }
 
-        // Clear contents of grading logic elements
         xml = clearTagContents(xml, 'ANSWER_TREE_CHECK_BOX');
         xml = clearTagContents(xml, 'INITIALSETUP');
         xml = clearTagContents(xml, 'COMPARISONS');
@@ -102,11 +99,11 @@ function clearRecentFiles(xml) {
 
 function setTimeLimit(xml, time_ms, timer_type) {
     let result = xml.replace(/TIMERTYPE="[^"]*"/g, `TIMERTYPE="${timer_type}"`);
-    if (timer_type === 1) { // Countdown
+    if (timer_type === 1) { 
         result = result.replace(/COUNTDOWNMS="[^"]*"/g, `COUNTDOWNMS="${time_ms}"`);
         result = result.replace(/COUNTDOWNLEFT="[^"]*"/g, `COUNTDOWNLEFT="${time_ms}"`);
         result = result.replace(/COUNTDOWN_EXPIRED="[^"]*"/g, `COUNTDOWN_EXPIRED="0"`);
-    } else { // Elapsed
+    } else { 
         result = result.replace(/ELAPSED="[^"]*"/g, `ELAPSED="0"`);
     }
     return result;

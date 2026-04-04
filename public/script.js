@@ -1,4 +1,5 @@
-﻿let fullXmlText = "";
+﻿// ================= DATA STATE =================
+let fullXmlText = "";
 let currentMode = 'lab';
 
 // Per-Lab defaults
@@ -7,6 +8,9 @@ let labs = [{
     title: "Lab 1",
     show_score: true,
     show_msg: true,
+    show_missed: true,
+    comp_start: "",
+    comp_end: "",
     max_submissions: 0,
     max_upload_mb: 2,
     max_xml_output_mb: 25,
@@ -140,6 +144,7 @@ function loadLabToUI() {
     document.getElementById('labTitle').value = l.title;
     document.getElementById('labShowMsg').checked = l.show_msg;
     document.getElementById('labShowScore').checked = l.show_score;
+    document.getElementById('labShowMissed').checked = !!l.show_missed;
     
     document.getElementById('labMaxPka').value = l.max_upload_mb !== undefined ? l.max_upload_mb : 2;
     document.getElementById('labMaxXml').value = l.max_xml_output_mb !== undefined ? l.max_xml_output_mb : 25;
@@ -149,6 +154,8 @@ function loadLabToUI() {
     
     document.getElementById('labTime').value = l.time_limit_minutes !== undefined ? l.time_limit_minutes : 0;
     document.getElementById('labPkaFile').value = l.pka_file || "";
+    document.getElementById('labCompStart').value = l.comp_start || "";
+    document.getElementById('labCompEnd').value = l.comp_end || "";
 
     renderChecks();
 }
@@ -163,7 +170,8 @@ function addLab() {
     labs.push({ 
         id: `lab${newIdx + 1}`, 
         title: `Lab ${newIdx + 1}`, 
-        show_score: true, show_msg: true, 
+        show_score: true, show_msg: true, show_missed: true,
+        comp_start: "", comp_end: "",
         max_submissions: 0, max_upload_mb: 2, max_xml_output_mb: 25, rate_limit_count: 5, rate_limit_window: 60,
         time_limit_minutes: 0, pka_file: "",
         checks: [] 
@@ -186,6 +194,7 @@ function updateLabMeta() {
     l.title = document.getElementById('labTitle').value;
     l.show_msg = document.getElementById('labShowMsg').checked;
     l.show_score = document.getElementById('labShowScore').checked;
+    l.show_missed = document.getElementById('labShowMissed').checked;
     
     l.max_upload_mb = parseInt(document.getElementById('labMaxPka').value) || 2;
     l.max_xml_output_mb = parseInt(document.getElementById('labMaxXml').value) || 25;
@@ -195,6 +204,8 @@ function updateLabMeta() {
 
     l.time_limit_minutes = parseInt(document.getElementById('labTime').value) || 0;
     l.pka_file = document.getElementById('labPkaFile').value.trim();
+    l.comp_start = document.getElementById('labCompStart').value.trim();
+    l.comp_end = document.getElementById('labCompEnd').value.trim();
 
     const sel = document.getElementById('labSelector');
     if(sel.options[currentLabIdx]) sel.options[currentLabIdx].text = l.title;
@@ -205,7 +216,7 @@ function addCheck(data) {
     let defaultMsg = `Check ${data.value || 'Configuration'}`;
     if (defaultMsg.length > 40) defaultMsg = defaultMsg.substring(0, 40) + '...';
     
-    let checkObj = { ...data, message: defaultMsg, points: 1, source: data.source || 'running' };
+    let checkObj = { ...data, message: defaultMsg, points: 10, source: data.source || 'running' };
     
     if (checkObj.type === 'Type5Match') {
         checkObj.mode = data.mode || 'device';
@@ -341,6 +352,11 @@ function genLab() {
         out += `title = "${l.title}"\n`;
         out += `show_score = ${l.show_score}\n`;
         out += `show_check_messages = ${l.show_msg}\n`;
+        if (l.show_missed) out += `show_missed_points = true\n`;
+        
+        if (l.comp_start) out += `comp_start = "${l.comp_start}"\n`;
+        if (l.comp_end) out += `comp_end = "${l.comp_end}"\n`;
+
         out += `max_submissions = ${l.max_submissions}\n`;
         out += `max_upload_mb = ${l.max_upload_mb}\n`;
         out += `max_xml_output_mb = ${l.max_xml_output_mb}\n`;
@@ -378,7 +394,15 @@ function genLab() {
 // ================= QUIZ LOGIC =================
 function addQuiz() {
     const newIdx = quizzes.length;
-    quizzes.push({ id: `quiz${newIdx + 1}`, title: `Quiz ${newIdx + 1}`, enabled: true, show_score: true, show_correct: true, time: 15, attempts: 3, questions: [] });
+    quizzes.push({ 
+        id: `quiz${newIdx + 1}`, 
+        title: `Quiz ${newIdx + 1}`, 
+        show_score: true, show_correct: true, show_missed: true, 
+        comp_start: "", comp_end: "", 
+        time: 15, attempts: 3, 
+        rate_limit_count: 5, rate_limit_window: 60,
+        questions: [] 
+    });
     renderQuizList();
     selectQuiz(newIdx);
 }
@@ -409,9 +433,14 @@ function loadQuizToUI() {
     document.getElementById('qTitle').value = q.title;
     document.getElementById('qTime').value = q.time;
     document.getElementById('qAtt').value = q.attempts;
-    document.getElementById('qEnabled').checked = q.enabled;
     document.getElementById('qScore').checked = q.show_score;
     document.getElementById('qCorrect').checked = q.show_correct;
+    document.getElementById('qMissed').checked = !!q.show_missed;
+    document.getElementById('qCompStart').value = q.comp_start || "";
+    document.getElementById('qCompEnd').value = q.comp_end || "";
+    document.getElementById('qRateCount').value = q.rate_limit_count !== undefined ? q.rate_limit_count : 5;
+    document.getElementById('qRateWin').value = q.rate_limit_window !== undefined ? q.rate_limit_window : 60;
+    
     renderQuestions();
     genQuiz();
 }
@@ -422,9 +451,13 @@ function updateQuizMeta() {
     q.title = document.getElementById('qTitle').value;
     q.time = parseInt(document.getElementById('qTime').value);
     q.attempts = parseInt(document.getElementById('qAtt').value);
-    q.enabled = document.getElementById('qEnabled').checked;
     q.show_score = document.getElementById('qScore').checked;
     q.show_correct = document.getElementById('qCorrect').checked;
+    q.show_missed = document.getElementById('qMissed').checked;
+    q.comp_start = document.getElementById('qCompStart').value.trim();
+    q.comp_end = document.getElementById('qCompEnd').value.trim();
+    q.rate_limit_count = parseInt(document.getElementById('qRateCount').value) || 0;
+    q.rate_limit_window = parseInt(document.getElementById('qRateWin').value) || 0;
     renderQuizList();
     genQuiz();
 }
@@ -563,8 +596,12 @@ function removePair(qIdx, pIdx) { quizzes[currentQuizIdx].questions[qIdx].pairs.
 function genQuiz() {
     let out = "";
     quizzes.forEach(q => {
-        out += `[[quizzes]]\nid = "${q.id}"\ntitle = "${q.title}"\nenabled = ${q.enabled}\n`;
-        out += `time_limit_minutes = ${q.time}\nmax_attempts = ${q.attempts}\nshow_score = ${q.show_score}\nshow_corrections = ${q.show_correct}\n\n`;
+        out += `[[quizzes]]\nid = "${q.id}"\ntitle = "${q.title}"\n`;
+        out += `time_limit_minutes = ${q.time}\nmax_attempts = ${q.attempts}\nshow_score = ${q.show_score}\nshow_corrections = ${q.show_correct}\n`;
+        if (q.show_missed) out += `show_missed_points = true\n`;
+        if (q.comp_start) out += `comp_start = "${q.comp_start}"\n`;
+        if (q.comp_end) out += `comp_end = "${q.comp_end}"\n`;
+        out += `rate_limit_count = ${q.rate_limit_count}\nrate_limit_window_seconds = ${q.rate_limit_window}\n\n`;
         q.questions.forEach(qs => {
             out += `    [[quizzes.questions]]\n    text = "${qs.text}"\n    type = "${qs.type}"\n    points = ${qs.points !== undefined ? qs.points : 1}\n`;
             if (qs.image && qs.image.trim() !== '') out += `    image = "${qs.image}"\n`;
@@ -711,13 +748,12 @@ function applyDiffVisibility(node) {
 }
 
 function getCheckDataForCommand(trimmed, devName, source, context) {
-    // Only auto-map type 5 hashes (MD5) which begin with $1$
     if (trimmed.startsWith("enable secret 5 $1$")) {
         return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
     }
-    if (trimmed.startsWith("username ") && trimmed.includes(" secret 5 $1$")) {
-        const userMatch = trimmed.match(/^username\s+(\S+)/i);
-        return { type:'Type5Match', mode:'user', username: userMatch ? userMatch[1] : '', password:'', device:devName, context:context, source:source, value:trimmed };
+    const userMatch = trimmed.match(/^username\s+([^ ]+).*secret\s+5\s+\$1\$/i);
+    if (userMatch) {
+        return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
     }
     return { type:'ConfigMatch', device:devName, context:context, value:trimmed, source:source };
 }
@@ -1062,7 +1098,7 @@ function downloadXML() {
 
 // ================= SETTINGS EXPORT =================
 function initLocks() {
-    const grid = document.getElementById('lockGrid');
+    const grid = document.getElementById('lockGridFull');
     if (!grid) return;
     grid.innerHTML = '';
     
@@ -1081,12 +1117,12 @@ function toggleAllLocks(check) {
 }
 
 function togglePkaTimerInput() {
-    const mode = document.getElementById('pkaTimerMode').value;
-    document.getElementById('pkaTimeLimitContainer').style.display = mode === "1" ? 'block' : 'none';
+    const mode = document.getElementById('pkaTimerModeFull').value;
+    document.getElementById('pkaTimeLimitContainerFull').style.display = mode === "1" ? 'block' : 'none';
 }
 
 function readPKASettings(xml) {
-    // 1. Read Locks
+    // Read Locks
     const lockRegex = /<NODE[^>]*on="(yes|no)"[^>]*>\s*<ID>([^<]+)<\/ID>/g;
     let match;
     const currentLocks = {};
@@ -1101,12 +1137,12 @@ function readPKASettings(xml) {
         }
     });
 
-    // 2. Read Timer settings
+    // Read Timer settings
     const typeMatch = xml.match(/TIMERTYPE="([^"]*)"/);
     const timeMatch = xml.match(/COUNTDOWNMS="([^"]*)"/);
     
-    const tMode = document.getElementById('pkaTimerMode');
-    const tLimit = document.getElementById('pkaTimeLimit');
+    const tMode = document.getElementById('pkaTimerModeFull');
+    const tLimit = document.getElementById('pkaTimeLimitFull');
     
     if (typeMatch && typeMatch[1] === "1") {
         tMode.value = "1";
@@ -1173,8 +1209,8 @@ async function exportModifiedPKA() {
     btn.innerText = "⏳ Encrypting... Please Wait";
     btn.disabled = true;
 
-    const mode = document.getElementById('pkaTimerMode').value;
-    const mins = parseInt(document.getElementById('pkaTimeLimit').value) || 0;
+    const mode = document.getElementById('pkaTimerModeFull').value;
+    const mins = parseInt(document.getElementById('pkaTimeLimitFull').value) || 0;
     
     const locks = [];
     const unlocks = [];
