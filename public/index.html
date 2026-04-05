@@ -70,14 +70,13 @@
         <div class="mode-switcher">
             <button class="btn btn-outline active" id="modeLabBtn" onclick="switchMode('lab')">Lab Builder</button>
             <button class="btn btn-outline" id="modeQuizBtn" onclick="switchMode('quiz')">Quiz Builder</button>
-            <button class="btn btn-outline" id="modeSettingsBtn" onclick="switchMode('settings')">PKA Settings</button>
         </div>
         <button class="btn btn-outline" onclick="toggleHelp()" style="padding:2px 8px; border-radius:50%; width:24px; height:24px; justify-content:center;">?</button>
     </div>
     
     <div id="headerLabControls" style="display:flex; gap:10px; align-items:center;">
         <label class="custom-label" style="margin-right: 15px; color: var(--text);">
-            <input type="checkbox" id="diffToggle" onchange="toggleDiff(this.checked)">
+            <input type="checkbox" id="diffToggle" onchange="toggleDiff(this.checked)" checked>
             <span class="checkmark"></span> Show Differences Only
         </label>
         <div id="sourceBadge" class="badge">No PKA Loaded</div>
@@ -91,10 +90,6 @@
     <div id="headerQuizControls" style="display:none; gap:10px; align-items:center;">
         <span class="badge" style="background:var(--accent); color:black;">Quiz Mode</span>
     </div>
-
-    <div id="headerSettingsControls" style="display:none; gap:10px; align-items:center;">
-        <span class="badge" style="background:var(--accent); color:black;">PKA Settings Mode</span>
-    </div>
 </header>
 
 <div class="container">
@@ -106,6 +101,7 @@
             <div class="tabs">
                 <div class="tab active" onclick="setTab('tree')" id="tab-tree">Tree View</div>
                 <div class="tab" onclick="setTab('raw')" id="tab-raw">Raw XML</div>
+                <div class="tab" onclick="setTab('settings')" id="tab-settings">PKA Settings</div>
             </div>
             
             <div class="pane-toolbar" id="treeToolbar">
@@ -121,7 +117,7 @@
                 <div style="text-align:center; padding:40px; color:#666;" id="loadingText">
                     Upload a PKA file to begin.
                 </div>
-                <div id="treeRoot"></div>
+                <div id="treeRoot" class="diff-mode"></div>
             </div>
 
             <!-- RAW VIEW WITH LINE NUMBERS -->
@@ -131,6 +127,50 @@
                     <div id="rawContent" class="raw-content"></div>
                 </div>
                 <div class="floating-back" id="rawBackBtn" onclick="setTab('tree')">← Back to Tree</div>
+            </div>
+
+            <!-- PKA SETTINGS VIEW -->
+            <div class="scroll-area" id="view-settings" style="display:none; padding:15px; background:#1a1a1a;">
+                <h3 style="color:var(--accent); margin-top: 0; margin-bottom: 15px;">PKA Settings</h3>
+                
+                <div class="settings-card compact" style="margin-bottom: 15px;">
+                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Timer Mode</label>
+                    <select id="pkaTimerMode" class="field-input" style="margin-bottom:10px;" onchange="togglePkaTimerInput()">
+                        <option value="0">Elapsed Time</option>
+                        <option value="1">Countdown</option>
+                    </select>
+                    
+                    <div id="pkaTimeLimitContainer" style="display:none;">
+                        <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Time Limit (Minutes)</label>
+                        <input type="number" id="pkaTimeLimit" class="field-input" value="0">
+                    </div>
+                </div>
+
+                <div class="settings-card compact" style="margin-bottom: 15px;">
+                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Dynamic Feedback Mode</label>
+                    <select id="pkaFeedbackMode" class="field-input">
+                        <option value="0">None</option>
+                        <option value="1">Show item count percentage</option>
+                        <option value="2">Show score percentage</option>
+                        <option value="3">Show item count</option>
+                        <option value="4">Show score</option>
+                    </select>
+                </div>
+
+                <h4 style="color:#aaa; margin-bottom: 10px;">Lockable Features</h4>
+                <div style="margin-bottom: 15px;">
+                    <button class="mini-btn" onclick="toggleAllLocks(true)">Select All</button>
+                    <button class="mini-btn" onclick="toggleAllLocks(false)">Deselect All</button>
+                </div>
+                
+                <div id="lockGrid" style="display:flex; flex-direction:column; gap: 6px; padding-bottom: 30px;">
+                    <!-- Filled via JS -->
+                </div>
+                
+                <div style="position: sticky; bottom: 0; background: #1a1a1a; padding: 10px 0; border-top: 1px solid #333; text-align: center; display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn btn-outline" id="btnReplaceNetwork" style="width: 100%; padding: 10px; font-size: 0.9rem;" onclick="replaceAnswerNetwork()">Replace answer network with blank network</button>
+                    <button class="btn" id="btnExportPka" style="width: 100%; padding: 12px; font-size: 1rem;" onclick="exportModifiedPKA()">⬇ Download Modified PKA</button>
+                </div>
             </div>
         </div>
 
@@ -231,6 +271,7 @@
                         </div>
                     </div>
                     <div class="settings-row" style="margin-top:8px;">
+                         <label class="custom-label"><input type="checkbox" id="qEnabled" onchange="updateQuizMeta()"><span class="checkmark"></span> Enabled</label>
                          <label class="custom-label"><input type="checkbox" id="qScore" onchange="updateQuizMeta()"><span class="checkmark"></span> Score</label>
                          <label class="custom-label"><input type="checkbox" id="qCorrect" onchange="updateQuizMeta()"><span class="checkmark"></span> Corrections</label>
                          <label class="custom-label"><input type="checkbox" id="qMissed" onchange="updateQuizMeta()"><span class="checkmark"></span> Show Missed</label>
@@ -257,43 +298,6 @@
             
             <div id="quizEmptyState" style="text-align:center; padding:50px; color:#666;">
                 Select or Create a Quiz.
-            </div>
-        </div>
-    </div>
-
-    <!-- ================= SETTINGS SECTION ================= -->
-    <div id="settingsSection" class="section-wrapper" style="display:none; flex:1; width:100%; overflow:auto; padding:30px; background:#111;">
-        <div style="max-width: 900px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 5px; border: 1px solid var(--border);">
-            <h2 style="color:var(--accent); margin-top: 0;">PKA Settings & Export</h2>
-            <p style="color:#aaa; font-size:0.9rem; margin-bottom: 20px;">Configure Packet Tracer restrictions, set activity timers, and download the locked <code>.pka</code> to deploy to your students.</p>
-            
-            <div class="settings-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 30px; background: #1a1a1a; padding: 15px; border-radius: 4px; border: 1px solid #333;">
-                <div>
-                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Timer Mode</label>
-                    <select id="pkaTimerModeFull" class="field-input" onchange="togglePkaTimerInput()">
-                        <option value="0">Elapsed Time</option>
-                        <option value="1">Countdown</option>
-                    </select>
-                </div>
-                <div id="pkaTimeLimitContainerFull" style="display:none;">
-                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Time Limit (Minutes)</label>
-                    <input type="number" id="pkaTimeLimitFull" class="field-input" value="0">
-                </div>
-            </div>
-            
-            <h3 style="margin-bottom:15px; color:#fff; font-size: 1.1rem;">Lockable Features</h3>
-            <div style="margin-bottom: 15px;">
-                <button class="mini-btn" onclick="toggleAllLocks(true)">Select All</button>
-                <button class="mini-btn" onclick="toggleAllLocks(false)">Deselect All</button>
-            </div>
-            
-            <div id="lockGridFull" style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                <!-- Filled via JS -->
-            </div>
-            
-            <div style="margin-top:40px; text-align:center; padding-top: 20px; border-top: 1px solid #333; display: flex; flex-direction: column; align-items: center; gap: 15px;">
-                <button class="btn btn-outline" id="btnReplaceNetwork" style="width: 100%; padding: 10px; font-size: 0.9rem;" onclick="replaceAnswerNetwork()">Replace answer network with blank network</button>
-                <button class="btn" id="btnExportPka" style="width: 100%; padding: 12px; font-size: 1rem;" onclick="exportModifiedPKA()">⬇ Download Configured PKA</button>
             </div>
         </div>
     </div>

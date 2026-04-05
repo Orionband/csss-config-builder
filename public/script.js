@@ -55,21 +55,20 @@ window.onload = () => {
     setupResizer('resizerH', 'leftPane', 'horizontal');
     setupResizer('resizerV', 'outputPane', 'vertical');
     setupResizer('resizerV2', 'quizOutputPane', 'vertical');
+    
+    toggleDiff(true); // default to diff view on
 };
 
 function switchMode(mode) {
     currentMode = mode;
     document.getElementById('modeLabBtn').className = mode === 'lab' ? 'btn btn-outline active' : 'btn btn-outline';
     document.getElementById('modeQuizBtn').className = mode === 'quiz' ? 'btn btn-outline active' : 'btn btn-outline';
-    document.getElementById('modeSettingsBtn').className = mode === 'settings' ? 'btn btn-outline active' : 'btn btn-outline';
     
     document.getElementById('labSection').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('quizSection').style.display = mode === 'quiz' ? 'flex' : 'none';
-    document.getElementById('settingsSection').style.display = mode === 'settings' ? 'block' : 'none';
     
     document.getElementById('headerLabControls').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('headerQuizControls').style.display = mode === 'quiz' ? 'flex' : 'none';
-    document.getElementById('headerSettingsControls').style.display = mode === 'settings' ? 'flex' : 'none';
 }
 
 function toggleHelp() {
@@ -286,6 +285,18 @@ function renderChecks() {
                 </div>
                 ` : ''}
             `;
+        } else if (isXml) {
+            let pathStr = "[]";
+            if (c.path) {
+                try { pathStr = JSON.stringify(JSON.parse(c.path)); } 
+                catch(e) { pathStr = c.path; }
+            }
+            valueSectionHtml = `
+                <div class="settings-grid">
+                    <div><label class="field-label">Path (JSON Array)</label><input class="field-input" value='${pathStr.replace(/'/g, "&apos;")}' oninput="updateCheck(${i}, 'path', this.value)"></div>
+                    <div><label class="field-label">Value</label><input class="field-input" value="${(c.value||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'value', this.value)"></div>
+                </div>
+            `;
         } else {
             valueSectionHtml = `
                 <div><label class="field-label">Value</label><input class="field-input" value="${(c.value||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'value', this.value)"></div>
@@ -373,8 +384,14 @@ function genLab() {
             out += `        [[labs.checks.pass]]\n        type = "${c.type}"\n`;
             
             if(c.type.startsWith('Xml')) {
-                const pathArr = c.path ? JSON.parse(c.path).map(s => `"${s}"`).join(', ') : '';
-                out += `        path = [${pathArr}]\n        value = "${c.value}"\n\n`;
+                let pathArrStr = '';
+                try {
+                    const parsed = JSON.parse(c.path || '[]');
+                    pathArrStr = parsed.map(s => `"${s}"`).join(', ');
+                } catch (e) {
+                    pathArrStr = `"${c.path}"`;
+                }
+                out += `        path = [${pathArrStr}]\n        value = "${c.value}"\n\n`;
             } else if (c.type.startsWith('Type5Match')) {
                 out += `        source = "${c.source}"\n        context = "${c.context || 'global'}"\n`;
                 out += `        mode = "${c.mode || 'device'}"\n`;
@@ -433,6 +450,7 @@ function loadQuizToUI() {
     document.getElementById('qTitle').value = q.title;
     document.getElementById('qTime').value = q.time;
     document.getElementById('qAtt').value = q.attempts;
+    
     document.getElementById('qScore').checked = q.show_score;
     document.getElementById('qCorrect').checked = q.show_correct;
     document.getElementById('qMissed').checked = !!q.show_missed;
@@ -451,6 +469,7 @@ function updateQuizMeta() {
     q.title = document.getElementById('qTitle').value;
     q.time = parseInt(document.getElementById('qTime').value);
     q.attempts = parseInt(document.getElementById('qAtt').value);
+    
     q.show_score = document.getElementById('qScore').checked;
     q.show_correct = document.getElementById('qCorrect').checked;
     q.show_missed = document.getElementById('qMissed').checked;
@@ -458,6 +477,7 @@ function updateQuizMeta() {
     q.comp_end = document.getElementById('qCompEnd').value.trim();
     q.rate_limit_count = parseInt(document.getElementById('qRateCount').value) || 0;
     q.rate_limit_window = parseInt(document.getElementById('qRateWin').value) || 0;
+    
     renderQuizList();
     genQuiz();
 }
@@ -646,11 +666,13 @@ function jumpToRaw(text) {
                            '<span id="jumpTarget" class="highlight-flash">' + escapeHtml(match) + '</span>' + 
                            escapeHtml(after);
 
-        const target = document.getElementById('jumpTarget');
-        if(target) {
-            target.scrollIntoView({behavior: "smooth", block: "center"});
-            document.getElementById('rawBackBtn').style.display = 'block';
-        }
+        setTimeout(() => {
+            const target = document.getElementById('jumpTarget');
+            if(target) {
+                target.scrollIntoView({behavior: "smooth", block: "center"});
+                document.getElementById('rawBackBtn').style.display = 'block';
+            }
+        }, 50);
     } else {
         alert("Exact match not found in Raw view.");
     }
@@ -748,10 +770,10 @@ function applyDiffVisibility(node) {
 }
 
 function getCheckDataForCommand(trimmed, devName, source, context) {
-    if (trimmed.startsWith("enable secret 5 $1$")) {
+    if (/^enable\s+secret\s+5\s+\$1\$/i.test(trimmed)) {
         return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
     }
-    const userMatch = trimmed.match(/^username\s+([^ ]+).*secret\s+5\s+\$1\$/i);
+    const userMatch = trimmed.match(/^username\s+([^\s]+).*secret\s+5\s+\$1\$/i);
     if (userMatch) {
         return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
     }
@@ -831,7 +853,26 @@ function parseDevices(rootNode) {
         const nameTag = engine.querySelector("NAME");
         const name = nameTag ? nameTag.textContent : `Device ${index}`;
         
+        const typeTag = engine.querySelector("TYPE");
+        const devType = typeTag ? typeTag.textContent.toLowerCase() : "";
+        const isHost = ["pc", "laptop", "server"].includes(devType);
+        
         const devNode = createTreeItem(name, "device", root);
+
+        let commonFolders = null;
+        if (isHost) {
+            const mainFolder = createTreeItem("Common Attributes", "folder", devNode.childrenContainer);
+            addExpandSubtreeBtn(mainFolder);
+            
+            const globalFolder = createTreeItem("Global", "folder", mainFolder.childrenContainer);
+            addExpandSubtreeBtn(globalFolder);
+            
+            commonFolders = {
+                main: mainFolder,
+                global: globalFolder,
+                ports: {}
+            };
+        }
 
         const runConfig = engine.querySelector("RUNNINGCONFIG");
         if(runConfig) {
@@ -849,7 +890,7 @@ function parseDevices(rootNode) {
 
         const hwFolder = createTreeItem("Other Attributes", "folder", devNode.childrenContainer);
         addExpandSubtreeBtn(hwFolder);
-        parseXML(engine, hwFolder.childrenContainer, name, []);
+        parseXML(engine, hwFolder.childrenContainer, name, [], commonFolders);
     });
 }
 
@@ -870,7 +911,7 @@ function parseIOS(lines, container, devName, source) {
                     blockUI.element.classList.add('diff-unchanged');
                 }
                 const checkData = getCheckDataForCommand(trimmed, devName, source, 'global');
-                addActions(blockUI, checkData);
+                addActions(blockUI, checkData, trimmed);
             } else {
                 const cmdUI = createTreeItem(trimmed, "cmd", container);
                 if (initialSet[devName] && initialSet[devName].has(`${source}::${trimmed}`)) {
@@ -878,7 +919,7 @@ function parseIOS(lines, container, devName, source) {
                 }
                 
                 const checkData = getCheckDataForCommand(trimmed, devName, source, 'global');
-                addActions(cmdUI, checkData);
+                addActions(cmdUI, checkData, trimmed);
             }
         } else if (blockUI) {
             const trimmed = txt.trim();
@@ -888,25 +929,26 @@ function parseIOS(lines, container, devName, source) {
             }
             
             const checkData = getCheckDataForCommand(trimmed, devName, source, blockContext);
-            addActions(cmdUI, checkData);
+            addActions(cmdUI, checkData, trimmed);
         }
     });
 }
 
-function parseXML(node, container, devName, path) {
+function parseXML(node, container, devName, path, commonFolders) {
     if(node.tagName === "RUNNINGCONFIG" || node.tagName === "STARTUPCONFIG") return;
     
+    const cleanPath = path.filter(p => p !== "ENGINE");
+
     if (node.hasAttributes()) {
         for (let i = 0; i < node.attributes.length; i++) {
             const attr = node.attributes[i];
             const item = createTreeItem(`@${attr.name}: ${attr.value}`, "attr", container);
-            const cleanPath = path.filter(p => p !== "ENGINE");
-            cleanPath.push("$", attr.name);
             
-            const attrKey = `attr::${cleanPath.join('.')}::${attr.name}::${attr.value}`;
+            const currentPath = [...cleanPath, "$", attr.name];
+            const attrKey = `attr::${currentPath.join('.')}::${attr.name}::${attr.value}`;
             if (initialSet[devName] && initialSet[devName].has(attrKey)) item.element.classList.add('diff-unchanged');
 
-            addActions(item, { type:'XmlMatch', device:devName, path:JSON.stringify(cleanPath), value:attr.value }, attr.value);
+            addActions(item, { type:'XmlMatch', device:devName, path:JSON.stringify(currentPath), value:attr.value }, attr.value);
         }
     }
 
@@ -916,12 +958,67 @@ function parseXML(node, container, devName, path) {
         // Don't add blank xml nodes
         if(val && val.trim()) {
             const item = createTreeItem(`${node.tagName}: ${val}`, "leaf", container);
-            const cleanPath = path.filter(p => p !== "ENGINE");
             
             const valKey = `xml::${cleanPath.join('.')}::${val.trim()}`;
             if (initialSet[devName] && initialSet[devName].has(valKey)) item.element.classList.add('diff-unchanged');
 
             addActions(item, { type:'XmlMatch', device:devName, path:JSON.stringify(cleanPath), value:val }, val);
+
+            if (commonFolders) {
+                const portTags = ["IP", "SUBNET", "PORT_GATEWAY", "PORT_DHCP_ENABLE", "IPV6_ENABLED", "IPV6_LINK_LOCAL", "IPV6_PORT_DHCP_ENABLED", "PORT_DNS", "DHCP_SERVER_IP", "IPV6_PORT_GATEWAY", "IPV6_PORT_DNS", "IPV6_ADDRESS_AUTOCONFIG", "ACL_IN_ID", "ACL_OUT_ID", "ACLv6_IN_ID", "ACLv6_OUT_ID", "VLAN"];
+                let isCommon = false;
+                let isGlobal = false;
+                let label = `${node.tagName}: ${val}`;
+                let portNode = null;
+                
+                if (["NAME", "GATEWAY"].includes(node.tagName) && node.parentElement && node.parentElement.tagName === "ENGINE") {
+                    isCommon = true; isGlobal = true;
+                }
+                else if (["SERVER_IP", "SERVER_IPV6"].includes(node.tagName) && node.parentElement && node.parentElement.tagName === "DNS_CLIENT") {
+                    isCommon = true; isGlobal = true;
+                }
+                else if (portTags.includes(node.tagName) && node.parentElement && node.parentElement.tagName === "PORT") {
+                    isCommon = true;
+                    portNode = node.parentElement;
+                }
+                else if ((node.tagName === "ADDRESS" || node.tagName === "PREFIX") && node.parentElement && node.parentElement.tagName === "IPV6_ADDRESS") {
+                    isCommon = true;
+                    label = `IPV6_${node.tagName}: ${val}`;
+                    if (node.parentElement.parentElement && node.parentElement.parentElement.parentElement && node.parentElement.parentElement.parentElement.tagName === "PORT") {
+                        portNode = node.parentElement.parentElement.parentElement;
+                    }
+                }
+
+                if (isCommon) {
+                    let targetContainer = commonFolders.global.childrenContainer;
+                    
+                    if (!isGlobal && portNode) {
+                        const portTypeRaw = portNode.querySelector(":scope > TYPE");
+                        const portType = portTypeRaw ? portTypeRaw.textContent.replace(/^e/, '') : "Port";
+                        
+                        const portPathIdx = path.lastIndexOf("PORT");
+                        let portIndex = "0";
+                        if (portPathIdx !== -1 && portPathIdx + 1 < path.length) {
+                            if (!isNaN(parseInt(path[portPathIdx + 1]))) {
+                                portIndex = path[portPathIdx + 1];
+                            }
+                        }
+                        
+                        const portKey = `${portType} [${portIndex}]`;
+                        
+                        if (!commonFolders.ports[portKey]) {
+                            const f = createTreeItem(portKey, "folder", commonFolders.main.childrenContainer);
+                            addExpandSubtreeBtn(f);
+                            commonFolders.ports[portKey] = f;
+                        }
+                        targetContainer = commonFolders.ports[portKey].childrenContainer;
+                    }
+
+                    const cItem = createTreeItem(label, "leaf", targetContainer);
+                    if (initialSet[devName] && initialSet[devName].has(valKey)) cItem.element.classList.add('diff-unchanged');
+                    addActions(cItem, { type:'XmlMatch', device:devName, path:JSON.stringify(cleanPath), value:val }, val);
+                }
+            }
         }
     } else {
         const groups = {};
@@ -938,7 +1035,7 @@ function parseXML(node, container, devName, path) {
                     nextPath.push(idx.toString());
                 }
                 
-                parseXML(child, branch.childrenContainer, devName, nextPath);
+                parseXML(child, branch.childrenContainer, devName, nextPath, commonFolders);
             });
         }
     }
@@ -1098,7 +1195,7 @@ function downloadXML() {
 
 // ================= SETTINGS EXPORT =================
 function initLocks() {
-    const grid = document.getElementById('lockGridFull');
+    const grid = document.getElementById('lockGrid');
     if (!grid) return;
     grid.innerHTML = '';
     
@@ -1117,8 +1214,8 @@ function toggleAllLocks(check) {
 }
 
 function togglePkaTimerInput() {
-    const mode = document.getElementById('pkaTimerModeFull').value;
-    document.getElementById('pkaTimeLimitContainerFull').style.display = mode === "1" ? 'block' : 'none';
+    const mode = document.getElementById('pkaTimerMode').value;
+    document.getElementById('pkaTimeLimitContainer').style.display = mode === "1" ? 'block' : 'none';
 }
 
 function readPKASettings(xml) {
@@ -1141,8 +1238,8 @@ function readPKASettings(xml) {
     const typeMatch = xml.match(/TIMERTYPE="([^"]*)"/);
     const timeMatch = xml.match(/COUNTDOWNMS="([^"]*)"/);
     
-    const tMode = document.getElementById('pkaTimerModeFull');
-    const tLimit = document.getElementById('pkaTimeLimitFull');
+    const tMode = document.getElementById('pkaTimerMode');
+    const tLimit = document.getElementById('pkaTimeLimit');
     
     if (typeMatch && typeMatch[1] === "1") {
         tMode.value = "1";
@@ -1154,6 +1251,15 @@ function readPKASettings(xml) {
         tLimit.value = "0";
     }
     togglePkaTimerInput();
+
+    // Read Dynamic Feedback
+    const dynMatch = xml.match(/<DYNAMIC_PERCENTAGE_FEEDBACK\s+TYPE="([^"]*)">/);
+    const dfSelect = document.getElementById('pkaFeedbackMode');
+    if (dynMatch && dynMatch[1]) {
+        dfSelect.value = dynMatch[1];
+    } else {
+        dfSelect.value = "0";
+    }
 }
 
 async function replaceAnswerNetwork() {
@@ -1209,8 +1315,9 @@ async function exportModifiedPKA() {
     btn.innerText = "⏳ Encrypting... Please Wait";
     btn.disabled = true;
 
-    const mode = document.getElementById('pkaTimerModeFull').value;
-    const mins = parseInt(document.getElementById('pkaTimeLimitFull').value) || 0;
+    const mode = document.getElementById('pkaTimerMode').value;
+    const mins = parseInt(document.getElementById('pkaTimeLimit').value) || 0;
+    const fbMode = parseInt(document.getElementById('pkaFeedbackMode').value) || 0;
     
     const locks = [];
     const unlocks = [];
@@ -1223,6 +1330,7 @@ async function exportModifiedPKA() {
         xml: fullXmlText,
         timerType: parseInt(mode),
         timeMs: mins * 60 * 1000,
+        feedbackType: fbMode,
         locks: locks,
         unlocks: unlocks
     };
