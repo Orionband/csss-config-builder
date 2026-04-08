@@ -42,20 +42,29 @@
         </ul>
         <p style="color:var(--text-dim); font-size:0.9em;">Appending <b>Not</b> to any check type (e.g., <code>ConfigMatchNot</code>) inverts the result. The check passes only if the condition is not found.</p>
 
-        <h3>Quiz Builder</h3>
-        <ul>
-            <li>Switch to <b>Quiz Builder</b> in the top nav. Click <b>+ Create</b> to start a new quiz.</li>
-            <li>Click <b>+ Add Question</b> to insert questions. Supported types: <b>Text</b> (with optional Regex matching), <b>Multiple Choice</b>, and <b>Matching</b> (drag-and-drop).</li>
-            <li>To attach an image or PKA file to a question, use the <b>Exhibit</b> option on that question row.</li>
-            <li>Copy the <code>quiz.conf</code> output to your server when done.</li>
-        </ul>
-
         <h3>PKA Settings & Export</h3>
         <ul>
             <li><b>Timer Mode:</b> Set to <b>Countdown</b> and specify a time limit to enforce a deadline directly in the Packet Tracer client.</li>
             <li><b>Lockable Features:</b> Restrict access to Delete Tool, Check Results, CLI access, and other features.</li>
             <li><b>Replace:</b> Replaces the answer network with a blank one as well as deleting checked items by the activity wizard.</li>
             <li><b>Download Modified PKA:</b> Exports the PKA with all settings applied.</li>
+        </ul>
+		
+        <h3>Lab Checks & Advanced Conditions</h3>
+        <p>A check evaluates conditions in a hierarchy. Click <b>+ Add Condition</b> inside a check to add more rules:</p>
+        <ul>
+            <li><b style="color:#f66">Fail:</b> If *any* Fail condition matches, the entire check fails and awards 0 points. Useful for penalizing insecure setups (like open Telnet).</li>
+            <li><b style="color:#e6db74">PassOverride:</b> If *any* PassOverride condition matches, the check immediately passes. Useful when there are multiple valid ways to configure something.</li>
+            <li><b style="color:#a6e22e">Pass:</b> If no Fail or PassOverride conditions trigger, *all* Pass conditions must match for the check to pass.</li>
+        </ul>
+        <p><b>Penalties:</b> You can set negative points (e.g. <code>-5</code>) to penalize students for misconfigurations. The total lab score will bottom out at 0.</p>
+		
+		<h3>Quiz Builder</h3>
+        <ul>
+            <li>Switch to <b>Quiz Builder</b> in the top nav. Click <b>+ Create</b> to start a new quiz.</li>
+            <li>Click <b>+ Add Question</b> to insert questions. Supported types: <b>Text</b> (with optional Regex matching), <b>Multiple Choice</b>, and <b>Matching</b> (drag-and-drop).</li>
+            <li>To attach an image or PKA file to a question, use the <b>Exhibit</b> option on that question row.</li>
+            <li>Copy the <code>quiz.conf</code> output to your server when done.</li>
         </ul>
 
         <div style="text-align:center; margin-top:20px;">
@@ -147,14 +156,16 @@
                 </div>
 
                 <div class="settings-card compact" style="margin-bottom: 15px;">
-                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">Dynamic Feedback Mode</label>
-                    <select id="pkaFeedbackMode" class="field-input">
-                        <option value="0">None</option>
-                        <option value="1">Show item count percentage</option>
-                        <option value="2">Show score percentage</option>
-                        <option value="3">Show item count</option>
-                        <option value="4">Show score</option>
-                    </select>
+                    <label class="field-label" style="font-weight:bold; margin-bottom: 5px;">File & Compatibility</label>
+                    <label class="custom-label" style="display:block; margin-bottom:8px;">
+                        <input type="checkbox" id="pkaClearRecent" checked>
+                        <span class="checkmark"></span> Clear Recent Files History
+                    </label>
+                    <label class="custom-label" style="display:block;">
+                        <input type="checkbox" id="pkaForceCompat">
+                        <span class="checkmark"></span> Backward Compatibility (v6.0.1)
+                    </label>
+                    <p style="color:#888; font-size:0.7rem; margin-top:5px; margin-left:24px;">Warning: Compatibility mode may break the file if newer devices are used.</p>
                 </div>
 
                 <h4 style="color:#aaa; margin-bottom: 10px;">Lockable Features</h4>
@@ -271,7 +282,6 @@
                         </div>
                     </div>
                     <div class="settings-row" style="margin-top:8px;">
-                         <label class="custom-label"><input type="checkbox" id="qEnabled" onchange="updateQuizMeta()"><span class="checkmark"></span> Enabled</label>
                          <label class="custom-label"><input type="checkbox" id="qScore" onchange="updateQuizMeta()"><span class="checkmark"></span> Score</label>
                          <label class="custom-label"><input type="checkbox" id="qCorrect" onchange="updateQuizMeta()"><span class="checkmark"></span> Corrections</label>
                          <label class="custom-label"><input type="checkbox" id="qMissed" onchange="updateQuizMeta()"><span class="checkmark"></span> Show Missed</label>

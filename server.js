@@ -93,10 +93,6 @@ function modifyLocks(xml, locks, unlocks) {
     return result;
 }
 
-function clearRecentFiles(xml) {
-    return xml.replace(/<RECENT_FILES>[\s\S]*?<\/RECENT_FILES>/g, '<RECENT_FILES></RECENT_FILES>');
-}
-
 function setTimeLimit(xml, time_ms, timer_type) {
     let result = xml.replace(/TIMERTYPE="[^"]*"/g, `TIMERTYPE="${timer_type}"`);
     if (timer_type === 1) { 
@@ -111,11 +107,18 @@ function setTimeLimit(xml, time_ms, timer_type) {
 
 app.post('/api/export', (req, res) => {
     try {
-        let { xml, locks, unlocks, timeMs, timerType } = req.body;
+        let { xml, locks, unlocks, timeMs, timerType, clearRecent, forceCompat } = req.body;
         
         if (!xml) return res.status(400).json({ error: "Missing XML data" });
 
-        xml = clearRecentFiles(xml);
+        if (clearRecent) {
+            xml = xml.replace(/<RECENT_FILES>[\s\S]*?<\/RECENT_FILES>/g, '<RECENT_FILES></RECENT_FILES>');
+        }
+
+        if (forceCompat) {
+            xml = xml.replace(/<VERSION>\d+\.\d+\.\d+\.\d{4}<\/VERSION>/g, "<VERSION>6.0.1.0000</VERSION>");
+        }
+        
         if (locks || unlocks) xml = modifyLocks(xml, locks || [], unlocks || []);
         if (timerType !== undefined) xml = setTimeLimit(xml, timeMs || 0, timerType);
         

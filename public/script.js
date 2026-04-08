@@ -56,7 +56,7 @@ window.onload = () => {
     setupResizer('resizerV', 'outputPane', 'vertical');
     setupResizer('resizerV2', 'quizOutputPane', 'vertical');
     
-    toggleDiff(true); // default to diff view on
+    toggleDiff(true); 
 };
 
 function switchMode(mode) {
@@ -215,27 +215,35 @@ function addCheck(data) {
     let defaultMsg = `Check ${data.value || 'Configuration'}`;
     if (defaultMsg.length > 40) defaultMsg = defaultMsg.substring(0, 40) + '...';
     
-    let checkObj = { ...data, message: defaultMsg, points: 10, source: data.source || 'running' };
+    let condObj = { ...data, target: 'pass', source: data.source || 'running', context: data.context || 'global' };
     
-    if (checkObj.type === 'Type5Match') {
-        checkObj.mode = data.mode || 'device';
-        checkObj.password = data.password || '';
-        checkObj.username = data.username || '';
+    if (condObj.type === 'Type5Match') {
+        condObj.mode = data.mode || 'device';
+        condObj.password = data.password || '';
+        condObj.username = data.username || '';
     }
 
-    labs[currentLabIdx].checks.push(checkObj);
+    labs[currentLabIdx].checks.push({
+        message: defaultMsg,
+        points: 10,
+        device: data.device || "DeviceName",
+        conditions: [condObj]
+    });
     renderChecks();
 }
 
 function addManualCheck() {
     labs[currentLabIdx].checks.push({
         device: "DeviceName",
-        type: "ConfigMatch",
         message: "New Check",
         points: 5,
-        value: "command",
-        source: "running",
-        context: "global"
+        conditions: [{
+            target: 'pass',
+            type: 'ConfigMatch',
+            source: 'running',
+            context: 'global',
+            value: 'command'
+        }]
     });
     renderChecks();
 }
@@ -246,112 +254,158 @@ function renderChecks() {
     const currentChecks = labs[currentLabIdx].checks;
     document.getElementById('checkCount').innerText = currentChecks.length;
 
+    const types = [
+        "ConfigMatch", "ConfigMatchNot", 
+        "ConfigRegex", "ConfigRegexNot",
+        "XmlMatch", "XmlMatchNot", 
+        "XmlRegex", "XmlRegexNot",
+        "Type5Match", "Type5MatchNot"
+    ];
+
     currentChecks.forEach((c, i) => {
         const div = document.createElement('div');
         div.className = 'check-card';
-        const isXml = c.type.startsWith('Xml');
-        const isType5 = c.type.startsWith('Type5Match');
-        const typeColor = isXml ? '#66d9ef' : (isType5 ? '#ff66d9' : '#a6e22e');
-
-        const types = [
-            "ConfigMatch", "ConfigMatchNot", 
-            "ConfigRegex", "ConfigRegexNot",
-            "XmlMatch", "XmlMatchNot", 
-            "XmlRegex", "XmlRegexNot",
-            "Type5Match", "Type5MatchNot"
-        ];
         
-        let typeOpts = types.map(t => `<option value="${t}" ${c.type===t?'selected':''}>${t}</option>`).join('');
-        let typeSelect = `<select class="field-input" style="width:auto; padding:1px;" onchange="updateCheck(${i}, 'type', this.value)">${typeOpts}</select>`;
-
-        const isSourceVisible = !isXml;
-
-        let valueSectionHtml = '';
-        if (isType5) {
-            valueSectionHtml = `
-                <div class="settings-grid">
-                    <div><label class="field-label">Mode</label>
-                        <select class="field-input" onchange="updateCheck(${i}, 'mode', this.value)">
-                            <option value="device" ${c.mode==='device'?'selected':''}>Device (enable secret)</option>
-                            <option value="user" ${c.mode==='user'?'selected':''}>User (username secret)</option>
-                        </select>
-                    </div>
-                    <div><label class="field-label">Plaintext Password</label><input class="field-input" value="${(c.password||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'password', this.value)"></div>
-                </div>
-                ${c.mode === 'user' ? `
-                <div class="settings-grid">
-                    <div><label class="field-label">Username</label><input class="field-input" value="${(c.username||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'username', this.value)"></div>
-                    <div></div>
-                </div>
-                ` : ''}
-            `;
-        } else if (isXml) {
-            let pathStr = "[]";
-            if (c.path) {
-                try { pathStr = JSON.stringify(JSON.parse(c.path)); } 
-                catch(e) { pathStr = c.path; }
-            }
-            valueSectionHtml = `
-                <div class="settings-grid">
-                    <div><label class="field-label">Path (JSON Array)</label><input class="field-input" value='${pathStr.replace(/'/g, "&apos;")}' oninput="updateCheck(${i}, 'path', this.value)"></div>
-                    <div><label class="field-label">Value</label><input class="field-input" value="${(c.value||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'value', this.value)"></div>
-                </div>
-            `;
-        } else {
-            valueSectionHtml = `
-                <div><label class="field-label">Value</label><input class="field-input" value="${(c.value||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'value', this.value)"></div>
-            `;
-        }
-
-        div.innerHTML = `
+        let html = `
             <div class="check-header">
-                <input class="field-input" style="width:120px; font-weight:bold; color:${typeColor}" value="${(c.device||'').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'device', this.value)">
-                ${typeSelect}
+                <input class="field-input" style="width:150px; font-weight:bold; color:var(--text)" value="${(c.device||'').replace(/"/g, '&quot;')}" oninput="updateCheckMeta(${i}, 'device', this.value)">
                 <span class="remove-x" onclick="removeCheck(${i})">×</span>
             </div>
             <div class="settings-grid">
-                <div><label class="field-label">Message</label><input class="field-input" value="${c.message}" oninput="updateCheck(${i}, 'message', this.value)"></div>
-                <div><label class="field-label">Points</label><input type="number" class="field-input" value="${c.points}" oninput="updateCheck(${i}, 'points', this.value)"></div>
+                <div><label class="field-label">Message</label><input class="field-input" value="${(c.message||'').replace(/"/g, '&quot;')}" oninput="updateCheckMeta(${i}, 'message', this.value)"></div>
+                <div><label class="field-label">Points</label><input type="number" class="field-input" value="${c.points}" oninput="updateCheckMeta(${i}, 'points', this.value)"></div>
             </div>
-            
-            ${isSourceVisible ? `
-            <div class="settings-grid">
-                <div><label class="field-label">Source</label>
-                    <select class="field-input" onchange="updateCheck(${i}, 'source', this.value)">
-                        <option value="running" ${c.source==='running'?'selected':''}>running</option>
-                        <option value="startup" ${c.source==='startup'?'selected':''}>startup</option>
-                    </select>
-                </div>
-                <div><label class="field-label">Context</label><input class="field-input" value="${(c.context || 'global').replace(/"/g, '&quot;')}" oninput="updateCheck(${i}, 'context', this.value)"></div>
-            </div>` : ''}
-
-            ${valueSectionHtml}
+            <div class="conditions-list" style="margin-top: 10px; border-top: 1px solid #444; padding-top: 10px;">
         `;
+
+        if (!c.conditions) c.conditions = [];
+
+        c.conditions.forEach((cond, j) => {
+            const isXml = cond.type.startsWith('Xml');
+            const isType5 = cond.type.startsWith('Type5Match');
+
+            const typeColor = isXml ? '#66d9ef' : (isType5 ? '#ff66d9' : '#a6e22e');
+            
+            let targetColor = '#a6e22e'; // pass = green
+            if (cond.target === 'fail') targetColor = '#f66';
+            if (cond.target === 'passoverride') targetColor = '#e6db74';
+
+            let targetOpts = ['pass', 'fail', 'passoverride'].map(t => `<option value="${t}" ${cond.target===t?'selected':''}>${t}</option>`).join('');
+            let typeOpts = types.map(t => `<option value="${t}" ${cond.type===t?'selected':''}>${t}</option>`).join('');
+
+            html += `
+                <div style="background:#151515; padding:8px; margin-bottom:5px; border-radius:3px; border:1px solid #333; border-left: 3px solid ${targetColor};">
+                    <div style="display:flex; gap:10px; margin-bottom:5px; align-items:center;">
+                        <select class="field-input" style="width:auto; padding:2px; font-weight:bold; color:${targetColor}" onchange="updateCondition(${i}, ${j}, 'target', this.value)">${targetOpts}</select>
+                        <select class="field-input" style="width:auto; padding:2px; color:${typeColor}" onchange="updateCondition(${i}, ${j}, 'type', this.value)">${typeOpts}</select>
+                        <span class="remove-x" style="margin-left:auto; font-size:1.2rem; cursor:pointer; color:#888;" onclick="removeCondition(${i}, ${j})">×</span>
+                    </div>
+            `;
+
+            if (!isXml) {
+                html += `
+                    <div class="settings-grid compact-grid">
+                        <div>
+                            <select class="field-input" onchange="updateCondition(${i}, ${j}, 'source', this.value)">
+                                <option value="running" ${cond.source==='running'?'selected':''}>running</option>
+                                <option value="startup" ${cond.source==='startup'?'selected':''}>startup</option>
+                            </select>
+                        </div>
+                        <div><input class="field-input" placeholder="Context" value="${(cond.context || 'global').replace(/"/g, '&quot;')}" oninput="updateCondition(${i}, ${j}, 'context', this.value)"></div>
+                    </div>
+                `;
+            }
+
+            if (isType5) {
+                html += `
+                    <div class="settings-grid compact-grid" style="margin-top:5px;">
+                        <select class="field-input" onchange="updateCondition(${i}, ${j}, 'mode', this.value)">
+                            <option value="device" ${cond.mode==='device'?'selected':''}>Device (enable)</option>
+                            <option value="user" ${cond.mode==='user'?'selected':''}>User (username)</option>
+                        </select>
+                        <input class="field-input" placeholder="Plaintext Password" value="${(cond.password||'').replace(/"/g, '&quot;')}" oninput="updateCondition(${i}, ${j}, 'password', this.value)">
+                    </div>
+                `;
+                if (cond.mode === 'user') {
+                    html += `<input class="field-input" style="margin-top:5px;" placeholder="Username" value="${(cond.username||'').replace(/"/g, '&quot;')}" oninput="updateCondition(${i}, ${j}, 'username', this.value)">`;
+                }
+            } else if (isXml) {
+                let pathStr = "[]";
+                if (cond.path) {
+                    try { pathStr = JSON.stringify(JSON.parse(cond.path)); } 
+                    catch(e) { pathStr = cond.path; }
+                }
+                html += `
+                    <div class="settings-grid compact-grid" style="margin-top:5px;">
+                        <input class="field-input" placeholder='Path (JSON Array e.g. ["GATEWAY"])' value='${pathStr.replace(/'/g, "&apos;")}' oninput="updateCondition(${i}, ${j}, 'path', this.value)">
+                        <input class="field-input" placeholder="Value" value="${(cond.value||'').replace(/"/g, '&quot;')}" oninput="updateCondition(${i}, ${j}, 'value', this.value)">
+                    </div>
+                `;
+            } else {
+                html += `<input class="field-input" style="margin-top:5px;" placeholder="Value" value="${(cond.value||'').replace(/"/g, '&quot;')}" oninput="updateCondition(${i}, ${j}, 'value', this.value)">`;
+            }
+
+            html += `</div>`;
+        });
+
+        html += `
+            </div>
+            <button class="mini-btn" style="margin-top:5px;" onclick="addCondition(${i})">+ Add Condition</button>
+        `;
+
+        div.innerHTML = html;
         list.appendChild(div);
     });
+    
     genLab();
 }
 
-function updateCheck(idx, key, val) {
-    const c = labs[currentLabIdx].checks[idx];
-    c[key] = val;
-    if(key === 'type') {
-        if (val.startsWith('Type5Match') && !c.mode) {
-            c.mode = 'device';
-            c.password = '';
-            c.username = '';
+function updateCheckMeta(idx, key, val) {
+    labs[currentLabIdx].checks[idx][key] = val;
+    genLab();
+}
+
+function updateCondition(cIdx, condIdx, key, val) {
+    const cond = labs[currentLabIdx].checks[cIdx].conditions[condIdx];
+    cond[key] = val;
+    
+    if (key === 'type') {
+        if (val.startsWith('Type5Match') && !cond.mode) {
+            cond.mode = 'device';
+            cond.password = '';
+            cond.username = '';
         }
         renderChecks(); 
     } 
-    else if (key === 'mode') {
+    else if (key === 'mode' || key === 'target') {
         renderChecks();
     }
     else {
         genLab();
     }
 }
+
 function removeCheck(idx) {
     labs[currentLabIdx].checks.splice(idx, 1);
+    renderChecks();
+}
+
+function addCondition(cIdx) {
+    labs[currentLabIdx].checks[cIdx].conditions.push({
+        target: 'pass',
+        type: 'ConfigMatch',
+        source: 'running',
+        context: 'global',
+        value: 'command'
+    });
+    renderChecks();
+}
+
+function removeCondition(cIdx, condIdx) {
+    labs[currentLabIdx].checks[cIdx].conditions.splice(condIdx, 1);
+    if (labs[currentLabIdx].checks[cIdx].conditions.length === 0) {
+        labs[currentLabIdx].checks.splice(cIdx, 1);
+    }
     renderChecks();
 }
 
@@ -381,31 +435,39 @@ function genLab() {
         
         l.checks.forEach(c => {
             out += `    [[labs.checks]]\n    message = "${c.message}"\n    points = ${c.points}\n    device = "${c.device}"\n`;
-            out += `        [[labs.checks.pass]]\n        type = "${c.type}"\n`;
             
-            if(c.type.startsWith('Xml')) {
-                let pathArrStr = '';
-                try {
-                    const parsed = JSON.parse(c.path || '[]');
-                    pathArrStr = parsed.map(s => `"${s}"`).join(', ');
-                } catch (e) {
-                    pathArrStr = `"${c.path}"`;
+            c.conditions.forEach(cond => {
+                out += `        [[labs.checks.${cond.target}]]\n        type = "${cond.type}"\n`;
+                
+                if (cond.type.startsWith('Xml')) {
+                    let pathArrStr = '';
+                    try {
+                        const parsed = JSON.parse(cond.path || '[]');
+                        pathArrStr = parsed.map(s => `"${s}"`).join(', ');
+                    } catch (e) {
+                        pathArrStr = `"${cond.path}"`;
+                    }
+                    out += `        path = [${pathArrStr}]\n        value = "${cond.value}"\n`;
+                } 
+                else if (cond.type.startsWith('Type5Match')) {
+                    out += `        source = "${cond.source}"\n        context = "${cond.context || 'global'}"\n`;
+                    out += `        mode = "${cond.mode || 'device'}"\n`;
+                    if ((cond.mode || 'device') === 'user') {
+                        out += `        username = "${cond.username || ''}"\n`;
+                    }
+                    out += `        password = "${(cond.password || '').replace(/"/g, '\\"')}"\n`;
+                } 
+                else {
+                    out += `        source = "${cond.source}"\n        context = "${cond.context}"\n        value = "${(cond.value||'').replace(/"/g, '\\"')}"\n`;
                 }
-                out += `        path = [${pathArrStr}]\n        value = "${c.value}"\n\n`;
-            } else if (c.type.startsWith('Type5Match')) {
-                out += `        source = "${c.source}"\n        context = "${c.context || 'global'}"\n`;
-                out += `        mode = "${c.mode || 'device'}"\n`;
-                if ((c.mode || 'device') === 'user') {
-                    out += `        username = "${c.username || ''}"\n`;
-                }
-                out += `        password = "${(c.password || '').replace(/"/g, '\\"')}"\n\n`;
-            } else {
-                out += `        source = "${c.source}"\n        context = "${c.context}"\n        value = "${(c.value||'').replace(/"/g, '\\"')}"\n\n`;
-            }
+            });
+            out += "\n";
         });
         out += "\n";
     });
-    document.getElementById('labOutput').value = out;
+    
+    const labOutput = document.getElementById('labOutput');
+    if(labOutput) labOutput.value = out;
 }
 
 // ================= QUIZ LOGIC =================
@@ -635,7 +697,9 @@ function genQuiz() {
         });
         out += "\n";
     });
-    document.getElementById('quizOutput').value = out;
+    
+    const quizOutput = document.getElementById('quizOutput');
+    if(quizOutput) quizOutput.value = out;
 }
 
 // ================= RAW VIEW HIGHLIGHT & LINE NUMBERS =================
@@ -770,10 +834,11 @@ function applyDiffVisibility(node) {
 }
 
 function getCheckDataForCommand(trimmed, devName, source, context) {
-    if (/^enable\s+secret\s+5\s+\$1\$/i.test(trimmed)) {
+    const enableMatch = trimmed.match(/^enable\s+secret\s+5\s+(?:\$1\$[^\s]+)/i);
+    if (enableMatch) {
         return { type:'Type5Match', mode:'device', password:'', device:devName, context:context, source:source, value:trimmed };
     }
-    const userMatch = trimmed.match(/^username\s+([^\s]+).*secret\s+5\s+\$1\$/i);
+    const userMatch = trimmed.match(/^username\s+([^\s]+).*secret\s+5\s+(?:\$1\$[^\s]+)/i);
     if (userMatch) {
         return { type:'Type5Match', mode:'user', username: userMatch[1], password:'', device:devName, context:context, source:source, value:trimmed };
     }
@@ -1251,15 +1316,6 @@ function readPKASettings(xml) {
         tLimit.value = "0";
     }
     togglePkaTimerInput();
-
-    // Read Dynamic Feedback
-    const dynMatch = xml.match(/<DYNAMIC_PERCENTAGE_FEEDBACK\s+TYPE="([^"]*)">/);
-    const dfSelect = document.getElementById('pkaFeedbackMode');
-    if (dynMatch && dynMatch[1]) {
-        dfSelect.value = dynMatch[1];
-    } else {
-        dfSelect.value = "0";
-    }
 }
 
 async function replaceAnswerNetwork() {
@@ -1317,7 +1373,8 @@ async function exportModifiedPKA() {
 
     const mode = document.getElementById('pkaTimerMode').value;
     const mins = parseInt(document.getElementById('pkaTimeLimit').value) || 0;
-    const fbMode = parseInt(document.getElementById('pkaFeedbackMode').value) || 0;
+    const clearRecent = document.getElementById('pkaClearRecent').checked;
+    const forceCompat = document.getElementById('pkaForceCompat').checked;
     
     const locks = [];
     const unlocks = [];
@@ -1330,9 +1387,10 @@ async function exportModifiedPKA() {
         xml: fullXmlText,
         timerType: parseInt(mode),
         timeMs: mins * 60 * 1000,
-        feedbackType: fbMode,
         locks: locks,
-        unlocks: unlocks
+        unlocks: unlocks,
+        clearRecent: clearRecent,
+        forceCompat: forceCompat
     };
 
     try {
