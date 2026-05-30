@@ -27,6 +27,100 @@ let currentQuizIdx = -1;
 
 let initialSet = {};
 
+// Competition window times are always UTC in lab.conf / quiz.conf (not server local time).
+function formatUtcIso(d) {
+    return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+function buildUtcIsoFromInputs(prefix) {
+    const dateEl = document.getElementById(prefix + 'Date');
+    if (!dateEl || !dateEl.value) return '';
+    const timeEl = document.getElementById(prefix + 'Time');
+    const time = (timeEl && timeEl.value) ? timeEl.value : '00:00';
+    const [y, m, d] = dateEl.value.split('-').map(Number);
+    const [hh, mm] = time.split(':').map(Number);
+    return formatUtcIso(new Date(Date.UTC(y, m - 1, d, hh, mm || 0, 0)));
+}
+
+function setUtcInputsFromIso(prefix, iso) {
+    const dateEl = document.getElementById(prefix + 'Date');
+    const timeEl = document.getElementById(prefix + 'Time');
+    const readout = document.getElementById(prefix + 'Readout');
+    if (!dateEl || !timeEl) return;
+
+    if (!iso) {
+        dateEl.value = '';
+        timeEl.value = '';
+        if (readout) {
+            readout.textContent = 'Not set';
+            readout.classList.remove('active');
+        }
+        return;
+    }
+
+    const parsed = new Date(iso);
+    if (isNaN(parsed.getTime())) {
+        dateEl.value = '';
+        timeEl.value = '';
+        if (readout) {
+            readout.textContent = iso + ' (invalid)';
+            readout.classList.remove('active');
+        }
+        return;
+    }
+
+    const pad = (n) => String(n).padStart(2, '0');
+    dateEl.value = `${parsed.getUTCFullYear()}-${pad(parsed.getUTCMonth() + 1)}-${pad(parsed.getUTCDate())}`;
+    timeEl.value = `${pad(parsed.getUTCHours())}:${pad(parsed.getUTCMinutes())}`;
+    if (readout) {
+        readout.textContent = formatUtcIso(parsed);
+        readout.classList.add('active');
+    }
+}
+
+function updateCompReadouts(scope) {
+    const prefix = scope === 'lab' ? 'labComp' : 'qComp';
+    ['Start', 'End'].forEach((which) => {
+        const iso = buildUtcIsoFromInputs(prefix + which);
+        const readout = document.getElementById(prefix + which + 'Readout');
+        if (!readout) return;
+        if (!iso) {
+            readout.textContent = 'Not set';
+            readout.classList.remove('active');
+        } else {
+            readout.textContent = iso;
+            readout.classList.add('active');
+        }
+    });
+}
+
+function clearCompUtc(scope, which) {
+    const prefix = scope === 'lab' ? 'labComp' : 'qComp';
+    const dateEl = document.getElementById(prefix + which + 'Date');
+    const timeEl = document.getElementById(prefix + which + 'Time');
+    if (dateEl) dateEl.value = '';
+    if (timeEl) timeEl.value = '';
+    if (scope === 'lab') syncLabCompUtc();
+    else syncQuizCompUtc();
+}
+
+function syncLabCompUtc() {
+    const l = labs[currentLabIdx];
+    l.comp_start = buildUtcIsoFromInputs('labCompStart');
+    l.comp_end = buildUtcIsoFromInputs('labCompEnd');
+    updateCompReadouts('lab');
+    genLab();
+}
+
+function syncQuizCompUtc() {
+    if (currentQuizIdx < 0) return;
+    const q = quizzes[currentQuizIdx];
+    q.comp_start = buildUtcIsoFromInputs('qCompStart');
+    q.comp_end = buildUtcIsoFromInputs('qCompEnd');
+    updateCompReadouts('q');
+    genQuiz();
+}
+
 const lockableFeatures = [
     "Switching to Logical", "Switching to Physical", "Switching to Realtime", "Switching to Simulation", 
     "Hide Event List on Start", "Hide Network Component Box in Wiring Closets", "Hide User Created Packet Window", 
@@ -153,8 +247,8 @@ function loadLabToUI() {
     
     document.getElementById('labTime').value = l.time_limit_minutes !== undefined ? l.time_limit_minutes : 0;
     document.getElementById('labPkaFile').value = l.pka_file || "";
-    document.getElementById('labCompStart').value = l.comp_start || "";
-    document.getElementById('labCompEnd').value = l.comp_end || "";
+    setUtcInputsFromIso('labCompStart', l.comp_start || "");
+    setUtcInputsFromIso('labCompEnd', l.comp_end || "");
 
     renderChecks();
 }
@@ -203,8 +297,9 @@ function updateLabMeta() {
 
     l.time_limit_minutes = parseInt(document.getElementById('labTime').value) || 0;
     l.pka_file = document.getElementById('labPkaFile').value.trim();
-    l.comp_start = document.getElementById('labCompStart').value.trim();
-    l.comp_end = document.getElementById('labCompEnd').value.trim();
+    l.comp_start = buildUtcIsoFromInputs('labCompStart');
+    l.comp_end = buildUtcIsoFromInputs('labCompEnd');
+    updateCompReadouts('lab');
 
     const sel = document.getElementById('labSelector');
     if(sel.options[currentLabIdx]) sel.options[currentLabIdx].text = l.title;
@@ -516,8 +611,8 @@ function loadQuizToUI() {
     document.getElementById('qScore').checked = q.show_score;
     document.getElementById('qCorrect').checked = q.show_correct;
     document.getElementById('qMissed').checked = !!q.show_missed;
-    document.getElementById('qCompStart').value = q.comp_start || "";
-    document.getElementById('qCompEnd').value = q.comp_end || "";
+    setUtcInputsFromIso('qCompStart', q.comp_start || "");
+    setUtcInputsFromIso('qCompEnd', q.comp_end || "");
     document.getElementById('qRateCount').value = q.rate_limit_count !== undefined ? q.rate_limit_count : 5;
     document.getElementById('qRateWin').value = q.rate_limit_window !== undefined ? q.rate_limit_window : 60;
     
@@ -535,8 +630,9 @@ function updateQuizMeta() {
     q.show_score = document.getElementById('qScore').checked;
     q.show_correct = document.getElementById('qCorrect').checked;
     q.show_missed = document.getElementById('qMissed').checked;
-    q.comp_start = document.getElementById('qCompStart').value.trim();
-    q.comp_end = document.getElementById('qCompEnd').value.trim();
+    q.comp_start = buildUtcIsoFromInputs('qCompStart');
+    q.comp_end = buildUtcIsoFromInputs('qCompEnd');
+    updateCompReadouts('q');
     q.rate_limit_count = parseInt(document.getElementById('qRateCount').value) || 0;
     q.rate_limit_window = parseInt(document.getElementById('qRateWin').value) || 0;
     
@@ -702,44 +798,166 @@ function genQuiz() {
     if(quizOutput) quizOutput.value = out;
 }
 
-// ================= RAW VIEW HIGHLIGHT & LINE NUMBERS =================
-function updateLineNumbers(text) {
-    const lines = text.split('\n').length;
-    document.getElementById('lineNumbers').innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('\n');
+// ================= RAW VIEW — VIRTUALIZED =================
+let rawLines = [];
+let rawLineHeight = 18;
+let rawLineHeightMeasured = false;
+let rawVisiblePool = null;
+let rawHighlightLine = -1;
+let rawHighlightStart = -1;
+let rawHighlightLen = 0;
+let rawScrollRaf = 0;
+
+function rebuildRawLines() {
+    rawLines = fullXmlText ? fullXmlText.split('\n') : [];
+    rawHighlightLine = -1;
+}
+
+function updateLineNumbers() {
+    rebuildRawLines();
+    if (rawVisiblePool) renderRawViewport();
+}
+
+function ensureRawDom() {
+    const scrollArea = document.getElementById('view-raw');
+    if (!scrollArea) return false;
+
+    let spacer = document.getElementById('rawSpacer');
+    if (!spacer) {
+        spacer = document.createElement('div');
+        spacer.id = 'rawSpacer';
+        spacer.style.cssText = 'position:relative;width:100%;';
+        const backBtn = document.getElementById('rawBackBtn');
+        if (backBtn && backBtn.parentElement === scrollArea) {
+            scrollArea.insertBefore(spacer, backBtn);
+        } else {
+            scrollArea.appendChild(spacer);
+        }
+    }
+
+    if (!rawVisiblePool || !spacer.contains(rawVisiblePool)) {
+        rawVisiblePool = document.createElement('div');
+        rawVisiblePool.className = 'code-wrapper';
+        rawVisiblePool.style.position = 'absolute';
+        rawVisiblePool.style.left = '0';
+        rawVisiblePool.style.right = '0';
+        spacer.appendChild(rawVisiblePool);
+    }
+
+    return true;
+}
+
+function measureRawLineHeight() {
+    if (rawLineHeightMeasured) return;
+    rawLineHeightMeasured = true;
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:"Roboto Mono",monospace;font-size:0.8rem;line-height:1.4;';
+    probe.textContent = 'X';
+    document.body.appendChild(probe);
+    rawLineHeight = probe.getBoundingClientRect().height || 18;
+    document.body.removeChild(probe);
+}
+
+function populateRawView() {
+    if (!ensureRawDom()) return;
+    if (!rawLines.length && fullXmlText) rebuildRawLines();
+
+    const spacer = document.getElementById('rawSpacer');
+    if (!spacer) return;
+
+    measureRawLineHeight();
+    spacer.style.height = (rawLines.length * rawLineHeight + 20) + 'px';
+    renderRawViewport();
+}
+
+function onRawScroll() {
+    if (rawScrollRaf) return;
+    rawScrollRaf = requestAnimationFrame(() => {
+        rawScrollRaf = 0;
+        renderRawViewport();
+    });
+}
+
+function renderRawViewport() {
+    const scrollArea = document.getElementById('view-raw');
+    if (!scrollArea || !rawVisiblePool) return;
+    if (rawLines.length === 0) {
+        rawVisiblePool.innerHTML = '<div class="raw-content" style="padding:10px;color:#666;">Upload a PKA file to view raw XML.</div>';
+        return;
+    }
+
+    const scrollTop = scrollArea.scrollTop;
+    const viewH = scrollArea.clientHeight;
+    const overscan = 20;
+    const startLine = Math.max(0, Math.floor(scrollTop / rawLineHeight) - overscan);
+    const endLine = Math.min(rawLines.length, Math.ceil((scrollTop + viewH) / rawLineHeight) + overscan);
+
+    const gutterWidth = String(rawLines.length).length;
+
+    let gutterHtml = '';
+    let contentHtml = '';
+    for (let i = startLine; i < endLine; i++) {
+        const numStr = String(i + 1).padStart(gutterWidth, ' ');
+        gutterHtml += numStr + '\n';
+
+        if (i === rawHighlightLine) {
+            const line = rawLines[i];
+            const before = escapeHtmlRaw(line.slice(0, rawHighlightStart));
+            const match = escapeHtmlRaw(line.slice(rawHighlightStart, rawHighlightStart + rawHighlightLen));
+            const after = escapeHtmlRaw(line.slice(rawHighlightStart + rawHighlightLen));
+            contentHtml += before + '<mark class="highlight-flash" id="jumpTarget">' + match + '</mark>' + after + '\n';
+        } else {
+            contentHtml += escapeHtmlRaw(rawLines[i]) + '\n';
+        }
+    }
+
+    const topOffset = startLine * rawLineHeight;
+    rawVisiblePool.style.top = topOffset + 'px';
+    rawVisiblePool.innerHTML =
+        '<div class="line-numbers">' + gutterHtml + '</div>' +
+        '<div class="raw-content">' + contentHtml + '</div>';
+}
+
+function escapeHtmlRaw(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function clearRawHighlight() {
+    rawHighlightLine = -1;
 }
 
 function jumpToRaw(text) {
-    setTab('raw');
-    const rawDiv = document.getElementById('rawContent');
-    const originalText = fullXmlText;
-    
-    if (!originalText || !text) return;
+    if (!fullXmlText || !text) return;
 
-    const index = originalText.indexOf(text);
-    
-    if (index !== -1) {
-        const before = originalText.substring(0, index);
-        const match = originalText.substring(index, index + text.length);
-        const after = originalText.substring(index + text.length);
-        
-        const escapeHtml = (unsafe) => {
-            return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        }
-
-        rawDiv.innerHTML = escapeHtml(before) + 
-                           '<span id="jumpTarget" class="highlight-flash">' + escapeHtml(match) + '</span>' + 
-                           escapeHtml(after);
-
-        setTimeout(() => {
-            const target = document.getElementById('jumpTarget');
-            if(target) {
-                target.scrollIntoView({behavior: "smooth", block: "center"});
-                document.getElementById('rawBackBtn').style.display = 'block';
-            }
-        }, 50);
-    } else {
+    const index = fullXmlText.indexOf(text);
+    if (index === -1) {
         alert("Exact match not found in Raw view.");
+        return;
     }
+
+    const before = fullXmlText.slice(0, index);
+    const targetLine = before.split('\n').length - 1;
+    const lastNl = before.lastIndexOf('\n');
+    const colStart = lastNl === -1 ? index : index - lastNl - 1;
+
+    rawHighlightLine = targetLine;
+    rawHighlightStart = colStart;
+    const lineLen = rawLines[targetLine] ? rawLines[targetLine].length : 0;
+    rawHighlightLen = Math.min(text.length, lineLen - colStart);
+
+    setTab('raw');
+
+    const scrollArea = document.getElementById('view-raw');
+    const targetScroll = Math.max(0, targetLine * rawLineHeight - scrollArea.clientHeight / 2);
+    scrollArea.scrollTop = targetScroll;
+
+    renderRawViewport();
+
+    requestAnimationFrame(() => {
+        const target = document.getElementById('jumpTarget');
+        if (target) target.scrollIntoView({ block: 'center' });
+        document.getElementById('rawBackBtn').style.display = 'block';
+    });
 }
 
 // ================= INITIAL NETWORK DIFFERENCE LOGIC =================
@@ -856,7 +1074,13 @@ function setTab(mode) {
     document.getElementById('tab-raw').className = mode === 'raw' ? 'tab active' : 'tab';
     document.getElementById('tab-settings').className = mode === 'settings' ? 'tab active' : 'tab';
     
-    if(mode === 'tree') document.getElementById('rawBackBtn').style.display = 'none';
+    if (mode === 'raw') {
+        populateRawView();
+    }
+    if (mode === 'tree') {
+        rawHighlightLine = -1;
+        document.getElementById('rawBackBtn').style.display = 'none';
+    }
 }
 
 document.getElementById('fileInput').addEventListener('change', async (e) => {
@@ -876,8 +1100,7 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
         if(!res.ok) throw new Error(await res.text());
         
         fullXmlText = await res.text();
-        document.getElementById('rawContent').innerText = fullXmlText;
-        updateLineNumbers(fullXmlText);
+        updateLineNumbers();
         document.getElementById('dlBtn').disabled = false;
 
         const parser = new DOMParser();
@@ -1342,8 +1565,7 @@ async function replaceAnswerNetwork() {
         const data = await res.json();
         fullXmlText = data.xml;
         
-        document.getElementById('rawContent').innerText = fullXmlText;
-        updateLineNumbers(fullXmlText);
+        updateLineNumbers();
         alert("Answer network successfully replaced with a blank network.");
         
         // Reparse tree

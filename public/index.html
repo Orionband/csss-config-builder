@@ -27,7 +27,8 @@
         <ul>
             <li><b>Tree View:</b> Expands each device's parsed configuration. Click any node to inspect its value. Click <span style="color:var(--accent)">+ Add</span> to add it as a grading check in the right pane.</li>
             <li><b>Show Differences Only:</b> Hides elements that are identical between the Initial and Answer networks. Use this to quickly find what was configured in the answer key.</li>
-            <li><b>Raw XML:</b> Shows the full unprocessed XML from the PKA. Click the <code>&lt;&gt;</code> icon on any tree node to jump to that element's position in the raw XML.</li>
+            <li><b>Raw XML:</b> Shows the full unprocessed XML from the PKA with line numbers aligned to each source line (long lines scroll horizontally instead of wrapping). Click the <code>&lt;&gt;</code> icon on any tree node to jump to that value in Raw XML—the view scrolls to the match and highlights it without reloading the whole file. Use <b>← Back to Tree</b> to return.</li>
+            <li><b>Comp Start / Comp End:</b> Optional competition window for when students may submit. Use the <b>date</b> and <b>time</b> pickers in the lab settings panel; they always represent <b>UTC</b>, not your PC's local timezone or the server's timezone. The green readout below each picker shows the exact <code>comp_start</code> / <code>comp_end</code> string written to <code>lab.conf</code> (e.g. <code>2026-04-02T10:00:00Z</code>). Click <b>×</b> to clear a window. Leave both empty for no time restriction.</li>
             <li><b>Lab Selector:</b> Manage multiple labs in a single session. Use <b>+ Add Lab</b> to create a new one and configure its metadata (ID, title, limits, etc.).</li>
             <li><b>Manual Check:</b> Add a check without selecting from the tree. Useful when you know the config path already.</li>
         </ul>
@@ -63,6 +64,7 @@
         <ul>
             <li>Switch to <b>Quiz Builder</b> in the top nav. Click <b>+ Create</b> to start a new quiz.</li>
             <li>Click <b>+ Add Question</b> to insert questions. Supported types: <b>Text</b> (with optional Regex matching), <b>Multiple Choice</b>, and <b>Matching</b> (drag-and-drop).</li>
+            <li><b>Comp Start / Comp End:</b> Same UTC date/time pickers as in Lab Builder—values are always stored and exported in UTC for <code>quiz.conf</code>.</li>
             <li>To attach an image or PKA file to a question, use the <b>Exhibit</b> option on that question row.</li>
             <li>Copy the <code>quiz.conf</code> output to your server when done.</li>
         </ul>
@@ -129,12 +131,9 @@
                 <div id="treeRoot" class="diff-mode"></div>
             </div>
 
-            <!-- RAW VIEW WITH LINE NUMBERS -->
-            <div class="scroll-area" id="view-raw" style="display:none; background:#111; padding:0;">
-                <div class="code-wrapper">
-                    <div id="lineNumbers" class="line-numbers"></div>
-                    <div id="rawContent" class="raw-content"></div>
-                </div>
+            <!-- RAW VIEW WITH LINE NUMBERS (virtualized) -->
+            <div class="scroll-area" id="view-raw" style="display:none; background:#111; padding:0; overflow:auto;" onscroll="onRawScroll()">
+                <div id="rawSpacer" style="position:relative; width:100%;"></div>
                 <div class="floating-back" id="rawBackBtn" onclick="setTab('tree')">← Back to Tree</div>
             </div>
 
@@ -214,8 +213,24 @@
                     <div><label class="field-label">Time Limit (Mins, 0=unlim)</label><input type="number" class="field-input" id="labTime" oninput="updateLabMeta()"></div>
                     <div><label class="field-label">Starter PKA File</label><input type="text" class="field-input" id="labPkaFile" placeholder="e.g. lab1_starter.pka" oninput="updateLabMeta()"></div>
                     
-                    <div><label class="field-label">Comp Start (UTC)</label><input class="field-input" id="labCompStart" placeholder="e.g. 2026-04-02T10:00:00Z" oninput="updateLabMeta()"></div>
-                    <div><label class="field-label">Comp End (UTC)</label><input class="field-input" id="labCompEnd" placeholder="e.g. 2026-04-03T12:00:00Z" oninput="updateLabMeta()"></div>
+                    <div class="comp-utc-field">
+                        <label class="field-label">Comp Start <span class="utc-hint">(UTC)</span></label>
+                        <div class="utc-datetime-row">
+                            <input type="date" class="field-input" id="labCompStartDate" onchange="syncLabCompUtc()">
+                            <input type="time" class="field-input" id="labCompStartTime" step="60" onchange="syncLabCompUtc()">
+                            <button type="button" class="mini-btn utc-clear-btn" onclick="clearCompUtc('lab', 'Start')" title="Clear">×</button>
+                        </div>
+                        <div class="comp-utc-readout" id="labCompStartReadout"></div>
+                    </div>
+                    <div class="comp-utc-field">
+                        <label class="field-label">Comp End <span class="utc-hint">(UTC)</span></label>
+                        <div class="utc-datetime-row">
+                            <input type="date" class="field-input" id="labCompEndDate" onchange="syncLabCompUtc()">
+                            <input type="time" class="field-input" id="labCompEndTime" step="60" onchange="syncLabCompUtc()">
+                            <button type="button" class="mini-btn utc-clear-btn" onclick="clearCompUtc('lab', 'End')" title="Clear">×</button>
+                        </div>
+                        <div class="comp-utc-readout" id="labCompEndReadout"></div>
+                    </div>
                 </div>
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; padding-top:5px; border-top:1px solid #333;">
@@ -271,8 +286,24 @@
                         <div><label class="field-label">Time (Mins)</label><input type="number" class="field-input" id="qTime" oninput="updateQuizMeta()"></div>
                         <div><label class="field-label">Attempts</label><input type="number" class="field-input" id="qAtt" oninput="updateQuizMeta()"></div>
                         
-                        <div><label class="field-label">Comp Start (UTC)</label><input class="field-input" id="qCompStart" placeholder="e.g. 2026-04-02T10:00:00Z" oninput="updateQuizMeta()"></div>
-                        <div><label class="field-label">Comp End (UTC)</label><input class="field-input" id="qCompEnd" placeholder="e.g. 2026-04-03T12:00:00Z" oninput="updateQuizMeta()"></div>
+                        <div class="comp-utc-field">
+                            <label class="field-label">Comp Start <span class="utc-hint">(UTC)</span></label>
+                            <div class="utc-datetime-row">
+                                <input type="date" class="field-input" id="qCompStartDate" onchange="syncQuizCompUtc()">
+                                <input type="time" class="field-input" id="qCompStartTime" step="60" onchange="syncQuizCompUtc()">
+                                <button type="button" class="mini-btn utc-clear-btn" onclick="clearCompUtc('q', 'Start')" title="Clear">×</button>
+                            </div>
+                            <div class="comp-utc-readout" id="qCompStartReadout"></div>
+                        </div>
+                        <div class="comp-utc-field">
+                            <label class="field-label">Comp End <span class="utc-hint">(UTC)</span></label>
+                            <div class="utc-datetime-row">
+                                <input type="date" class="field-input" id="qCompEndDate" onchange="syncQuizCompUtc()">
+                                <input type="time" class="field-input" id="qCompEndTime" step="60" onchange="syncQuizCompUtc()">
+                                <button type="button" class="mini-btn utc-clear-btn" onclick="clearCompUtc('q', 'End')" title="Clear">×</button>
+                            </div>
+                            <div class="comp-utc-readout" id="qCompEndReadout"></div>
+                        </div>
                         
                         <div><label class="field-label">Rate Limit (Count / Secs)</label>
                             <div style="display:flex; gap:5px;">
