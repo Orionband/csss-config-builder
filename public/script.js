@@ -9,6 +9,7 @@ let labs = [{
     show_score: true,
     show_msg: true,
     show_missed: true,
+    live_streaming: false,
     comp_start: "",
     comp_end: "",
     max_submissions: 0,
@@ -238,6 +239,7 @@ function loadLabToUI() {
     document.getElementById('labShowMsg').checked = l.show_msg;
     document.getElementById('labShowScore').checked = l.show_score;
     document.getElementById('labShowMissed').checked = !!l.show_missed;
+    document.getElementById('labLiveStreaming').checked = !!l.live_streaming;
     
     document.getElementById('labMaxPka').value = l.max_upload_mb !== undefined ? l.max_upload_mb : 2;
     document.getElementById('labMaxXml').value = l.max_xml_output_mb !== undefined ? l.max_xml_output_mb : 25;
@@ -263,7 +265,7 @@ function addLab() {
     labs.push({ 
         id: `lab${newIdx + 1}`, 
         title: `Lab ${newIdx + 1}`, 
-        show_score: true, show_msg: true, show_missed: true,
+        show_score: true, show_msg: true, show_missed: true, live_streaming: false,
         comp_start: "", comp_end: "",
         max_submissions: 0, max_upload_mb: 2, max_xml_output_mb: 25, rate_limit_count: 5, rate_limit_window: 60,
         time_limit_minutes: 0, pka_file: "",
@@ -288,6 +290,7 @@ function updateLabMeta() {
     l.show_msg = document.getElementById('labShowMsg').checked;
     l.show_score = document.getElementById('labShowScore').checked;
     l.show_missed = document.getElementById('labShowMissed').checked;
+    l.live_streaming = document.getElementById('labLiveStreaming').checked;
     
     l.max_upload_mb = parseInt(document.getElementById('labMaxPka').value) || 2;
     l.max_xml_output_mb = parseInt(document.getElementById('labMaxXml').value) || 25;
@@ -511,6 +514,7 @@ function genLab() {
         out += `id = "${l.id}"\n`;
         out += `title = "${l.title}"\n`;
         out += `show_score = ${l.show_score}\n`;
+        out += `live_streaming = ${!!l.live_streaming}\n`;
         out += `show_check_messages = ${l.show_msg}\n`;
         if (l.show_missed) out += `show_missed_points = true\n`;
         
