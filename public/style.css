@@ -74,6 +74,8 @@ input[type="file"] { position: absolute; left: 0; top: 0; opacity: 0; width: 100
 .field-label { color: #888; font-size: 0.7rem; display: block; margin-bottom: 2px; }
 .field-input { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 3px 5px; font-family: inherit; font-size: 0.8rem; border-radius: 2px; }
 .field-input:focus { border-color: var(--accent); outline: none; }
+.field-input.homepage-body { resize: vertical; min-height: 72px; font-family: inherit; line-height: 1.4; }
+.homepage-block { background: #151515; border: 1px solid var(--border); border-radius: 4px; padding: 10px; }
 
 /* CHECKBOXES & RADIOS */
 .custom-label { display: inline-flex; align-items: center; position: relative; padding-left: 24px; cursor: pointer; font-size: 0.8rem; color: #ccc; user-select: none; }

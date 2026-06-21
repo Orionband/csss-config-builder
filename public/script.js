@@ -26,9 +26,22 @@ let currentLabIdx = 0;
 let quizzes = [];
 let currentQuizIdx = -1;
 
+let homepage = {
+    enabled: false,
+    page_title: "",
+    subtitle: "",
+    logo: "/logo.png",
+    comp_start: "",
+    comp_end: "",
+    period_label: "",
+    readme: { title: "README", body: "" },
+    rules: { title: "Rules", body: "" },
+    prizes: { title: "Prizes", body: "" }
+};
+
 let initialSet = {};
 
-// Competition window times are always UTC in lab.conf / quiz.conf (not server local time).
+// Competition window times are always UTC in lab.conf / quiz.conf / homepage.conf (not server local time).
 function formatUtcIso(d) {
     return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
@@ -80,7 +93,9 @@ function setUtcInputsFromIso(prefix, iso) {
 }
 
 function updateCompReadouts(scope) {
-    const prefix = scope === 'lab' ? 'labComp' : 'qComp';
+    const prefixMap = { lab: 'labComp', q: 'qComp', hp: 'hpComp' };
+    const prefix = prefixMap[scope];
+    if (!prefix) return;
     ['Start', 'End'].forEach((which) => {
         const iso = buildUtcIsoFromInputs(prefix + which);
         const readout = document.getElementById(prefix + which + 'Readout');
@@ -96,13 +111,16 @@ function updateCompReadouts(scope) {
 }
 
 function clearCompUtc(scope, which) {
-    const prefix = scope === 'lab' ? 'labComp' : 'qComp';
+    const prefixMap = { lab: 'labComp', q: 'qComp', hp: 'hpComp' };
+    const prefix = prefixMap[scope];
+    if (!prefix) return;
     const dateEl = document.getElementById(prefix + which + 'Date');
     const timeEl = document.getElementById(prefix + which + 'Time');
     if (dateEl) dateEl.value = '';
     if (timeEl) timeEl.value = '';
     if (scope === 'lab') syncLabCompUtc();
-    else syncQuizCompUtc();
+    else if (scope === 'q') syncQuizCompUtc();
+    else syncHomepageCompUtc();
 }
 
 function syncLabCompUtc() {
@@ -150,6 +168,10 @@ window.onload = () => {
     setupResizer('resizerH', 'leftPane', 'horizontal');
     setupResizer('resizerV', 'outputPane', 'vertical');
     setupResizer('resizerV2', 'quizOutputPane', 'vertical');
+    setupResizer('resizerV3', 'homepageOutputPane', 'vertical');
+    
+    loadHomepageToUI();
+    genHomepage();
     
     toggleDiff(true); 
 };
@@ -158,12 +180,15 @@ function switchMode(mode) {
     currentMode = mode;
     document.getElementById('modeLabBtn').className = mode === 'lab' ? 'btn btn-outline active' : 'btn btn-outline';
     document.getElementById('modeQuizBtn').className = mode === 'quiz' ? 'btn btn-outline active' : 'btn btn-outline';
+    document.getElementById('modeHomepageBtn').className = mode === 'homepage' ? 'btn btn-outline active' : 'btn btn-outline';
     
     document.getElementById('labSection').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('quizSection').style.display = mode === 'quiz' ? 'flex' : 'none';
+    document.getElementById('homepageSection').style.display = mode === 'homepage' ? 'flex' : 'none';
     
     document.getElementById('headerLabControls').style.display = mode === 'lab' ? 'flex' : 'none';
     document.getElementById('headerQuizControls').style.display = mode === 'quiz' ? 'flex' : 'none';
+    document.getElementById('headerHomepageControls').style.display = mode === 'homepage' ? 'flex' : 'none';
 }
 
 function toggleHelp() {
@@ -201,8 +226,8 @@ function setupResizer(resizerId, targetId, direction) {
 }
 
 function copyToClipboard(type) {
-    const id = type === 'lab' ? 'labOutput' : 'quizOutput';
-    const copyText = document.getElementById(id);
+    const idMap = { lab: 'labOutput', quiz: 'quizOutput', homepage: 'homepageOutput' };
+    const copyText = document.getElementById(idMap[type]);
     copyText.select();
     document.execCommand("copy");
     alert("Copied config!");
@@ -800,6 +825,85 @@ function genQuiz() {
     
     const quizOutput = document.getElementById('quizOutput');
     if(quizOutput) quizOutput.value = out;
+}
+
+// ================= HOMEPAGE LOGIC =================
+function tomlBasicString(s) {
+    return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
+function tomlMultilineString(s) {
+    const text = String(s);
+    if (!text) return '""';
+    if (text.includes('"""')) {
+        return "'''\n" + text + "\n'''";
+    }
+    return '"""\n' + text + '\n"""';
+}
+
+function loadHomepageToUI() {
+    document.getElementById('hpEnabled').checked = homepage.enabled;
+    document.getElementById('hpPageTitle').value = homepage.page_title || '';
+    document.getElementById('hpSubtitle').value = homepage.subtitle || '';
+    document.getElementById('hpLogo').value = homepage.logo || '/logo.png';
+    document.getElementById('hpPeriodLabel').value = homepage.period_label || '';
+    document.getElementById('hpReadmeTitle').value = homepage.readme.title || 'README';
+    document.getElementById('hpReadmeBody').value = homepage.readme.body || '';
+    document.getElementById('hpRulesTitle').value = homepage.rules.title || 'Rules';
+    document.getElementById('hpRulesBody').value = homepage.rules.body || '';
+    document.getElementById('hpPrizesTitle').value = homepage.prizes.title || 'Prizes';
+    document.getElementById('hpPrizesBody').value = homepage.prizes.body || '';
+    setUtcInputsFromIso('hpCompStart', homepage.comp_start || '');
+    setUtcInputsFromIso('hpCompEnd', homepage.comp_end || '');
+    updateCompReadouts('hp');
+}
+
+function updateHomepageMeta() {
+    homepage.enabled = document.getElementById('hpEnabled').checked;
+    homepage.page_title = document.getElementById('hpPageTitle').value.trim();
+    homepage.subtitle = document.getElementById('hpSubtitle').value.trim();
+    homepage.logo = document.getElementById('hpLogo').value.trim() || '/logo.png';
+    homepage.period_label = document.getElementById('hpPeriodLabel').value.trim();
+    homepage.readme.title = document.getElementById('hpReadmeTitle').value.trim() || 'README';
+    homepage.readme.body = document.getElementById('hpReadmeBody').value;
+    homepage.rules.title = document.getElementById('hpRulesTitle').value.trim() || 'Rules';
+    homepage.rules.body = document.getElementById('hpRulesBody').value;
+    homepage.prizes.title = document.getElementById('hpPrizesTitle').value.trim() || 'Prizes';
+    homepage.prizes.body = document.getElementById('hpPrizesBody').value;
+    genHomepage();
+}
+
+function syncHomepageCompUtc() {
+    homepage.comp_start = buildUtcIsoFromInputs('hpCompStart');
+    homepage.comp_end = buildUtcIsoFromInputs('hpCompEnd');
+    updateCompReadouts('hp');
+    genHomepage();
+}
+
+function appendHomepageBlock(out, key, block, defaultTitle) {
+    if (!block.body || !block.body.trim()) return out;
+    out += `\n[homepage.${key}]\n`;
+    out += `title = ${tomlBasicString((block.title || defaultTitle).trim() || defaultTitle)}\n`;
+    out += `body = ${tomlMultilineString(block.body.trim())}\n`;
+    return out;
+}
+
+function genHomepage() {
+    let out = '[homepage]\n';
+    out += `enabled = ${homepage.enabled}\n`;
+    if (homepage.page_title) out += `page_title = ${tomlBasicString(homepage.page_title)}\n`;
+    if (homepage.subtitle) out += `subtitle = ${tomlBasicString(homepage.subtitle)}\n`;
+    if (homepage.enabled && homepage.logo) out += `logo = ${tomlBasicString(homepage.logo)}\n`;
+    if (homepage.comp_start) out += `comp_start = ${tomlBasicString(homepage.comp_start)}\n`;
+    if (homepage.comp_end) out += `comp_end = ${tomlBasicString(homepage.comp_end)}\n`;
+    if (homepage.period_label) out += `period_label = ${tomlBasicString(homepage.period_label)}\n`;
+
+    out = appendHomepageBlock(out, 'readme', homepage.readme, 'README');
+    out = appendHomepageBlock(out, 'rules', homepage.rules, 'Rules');
+    out = appendHomepageBlock(out, 'prizes', homepage.prizes, 'Prizes');
+
+    const homepageOutput = document.getElementById('homepageOutput');
+    if (homepageOutput) homepageOutput.value = out.trim() + '\n';
 }
 
 // ================= RAW VIEW — VIRTUALIZED =================

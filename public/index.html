@@ -69,6 +69,16 @@
             <li>Copy the <code>quiz.conf</code> output to your server when done.</li>
         </ul>
 
+        <h3>Homepage Builder</h3>
+        <ul>
+            <li>Switch to <b>Homepage Builder</b> to create an optional <code>configs/homepage.conf</code> landing page.</li>
+            <li>Check <b>Enabled</b> to serve a public landing page at <code>/</code> instead of the login form. Login moves to <code>/login</code>.</li>
+            <li>Place a logo image under <code>public/</code> (default path: <code>/logo.png</code>) and set the <b>Logo</b> field if needed.</li>
+            <li><b>Comp Start / Comp End</b> and <b>Period Label</b> control the competition window display. UTC pickers match Lab/Quiz Builder.</li>
+            <li><b>README</b>, <b>Rules</b>, and <b>Prizes</b> sections appear only when their body text is non-empty. Use multiline text for paragraphs.</li>
+            <li>Copy the output to <code>configs/homepage.conf</code> on your server, run <code>npm run validate-config</code>, then restart (or reload config).</li>
+        </ul>
+
         <div style="text-align:center; margin-top:20px;">
             <button class="btn" onclick="toggleHelp()">Close</button>
         </div>
@@ -81,6 +91,7 @@
         <div class="mode-switcher">
             <button class="btn btn-outline active" id="modeLabBtn" onclick="switchMode('lab')">Lab Builder</button>
             <button class="btn btn-outline" id="modeQuizBtn" onclick="switchMode('quiz')">Quiz Builder</button>
+            <button class="btn btn-outline" id="modeHomepageBtn" onclick="switchMode('homepage')">Homepage Builder</button>
         </div>
         <button class="btn btn-outline" onclick="toggleHelp()" style="padding:2px 8px; border-radius:50%; width:24px; height:24px; justify-content:center;">?</button>
     </div>
@@ -100,6 +111,10 @@
 
     <div id="headerQuizControls" style="display:none; gap:10px; align-items:center;">
         <span class="badge" style="background:var(--accent); color:black;">Quiz Mode</span>
+    </div>
+
+    <div id="headerHomepageControls" style="display:none; gap:10px; align-items:center;">
+        <span class="badge" style="background:var(--accent); color:black;">Homepage Mode</span>
     </div>
 </header>
 
@@ -340,6 +355,79 @@
             
             <div id="quizEmptyState" style="text-align:center; padding:50px; color:#666;">
                 Select or Create a Quiz.
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= HOMEPAGE SECTION ================= -->
+    <div id="homepageSection" class="section-wrapper" style="display:none; flex:1; width:100%; overflow:hidden;">
+        <div class="pane right" style="flex:1; width:100%;">
+            <div id="homepageEditor" style="display:flex; flex-direction:column; height:100%;">
+                <div class="settings-card">
+                    <div class="settings-row" style="margin-bottom:10px;">
+                        <label class="custom-label">
+                            <input type="checkbox" id="hpEnabled" onchange="updateHomepageMeta()">
+                            <span class="checkmark"></span> Enabled (serve landing page at <code>/</code>)
+                        </label>
+                    </div>
+                    <div class="settings-grid">
+                        <div><label class="field-label">Page Title</label><input class="field-input" id="hpPageTitle" maxlength="200" placeholder="Spring Networking Event" oninput="updateHomepageMeta()"></div>
+                        <div><label class="field-label">Subtitle</label><input class="field-input" id="hpSubtitle" maxlength="500" placeholder="Packet Tracer labs and quizzes — good luck!" oninput="updateHomepageMeta()"></div>
+                        <div><label class="field-label">Logo Path</label><input class="field-input" id="hpLogo" placeholder="/logo.png" oninput="updateHomepageMeta()"><span style="color:#666; font-size:0.65rem;">Must start with / and must not contain ..</span></div>
+                        <div><label class="field-label">Period Label</label><input class="field-input" id="hpPeriodLabel" maxlength="200" placeholder="April 2–3, 2026 (UTC)" oninput="updateHomepageMeta()"></div>
+                        <div class="comp-utc-field">
+                            <label class="field-label">Comp Start <span class="utc-hint">(UTC)</span></label>
+                            <div class="utc-datetime-row">
+                                <input type="date" class="field-input" id="hpCompStartDate" onchange="syncHomepageCompUtc()">
+                                <input type="time" class="field-input" id="hpCompStartTime" step="60" onchange="syncHomepageCompUtc()">
+                                <button type="button" class="mini-btn utc-clear-btn" onclick="clearCompUtc('hp', 'Start')" title="Clear">×</button>
+                            </div>
+                            <div class="comp-utc-readout" id="hpCompStartReadout"></div>
+                        </div>
+                        <div class="comp-utc-field">
+                            <label class="field-label">Comp End <span class="utc-hint">(UTC)</span></label>
+                            <div class="utc-datetime-row">
+                                <input type="date" class="field-input" id="hpCompEndDate" onchange="syncHomepageCompUtc()">
+                                <input type="time" class="field-input" id="hpCompEndTime" step="60" onchange="syncHomepageCompUtc()">
+                                <button type="button" class="mini-btn utc-clear-btn" onclick="clearCompUtc('hp', 'End')" title="Clear">×</button>
+                            </div>
+                            <div class="comp-utc-readout" id="hpCompEndReadout"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-card" style="flex:1; overflow:auto;">
+                    <div class="settings-grid" style="grid-template-columns: 1fr;">
+                        <div class="homepage-block">
+                            <label class="field-label">README — Title</label>
+                            <input class="field-input" id="hpReadmeTitle" maxlength="200" placeholder="About" oninput="updateHomepageMeta()">
+                            <label class="field-label" style="margin-top:8px;">README — Body</label>
+                            <textarea class="field-input homepage-body" id="hpReadmeBody" maxlength="8000" rows="4" placeholder="Welcome to the event landing page..." oninput="updateHomepageMeta()"></textarea>
+                        </div>
+                        <div class="homepage-block">
+                            <label class="field-label">Rules — Title</label>
+                            <input class="field-input" id="hpRulesTitle" maxlength="200" placeholder="Rules" oninput="updateHomepageMeta()">
+                            <label class="field-label" style="margin-top:8px;">Rules — Body</label>
+                            <textarea class="field-input homepage-body" id="hpRulesBody" maxlength="8000" rows="3" placeholder="No sharing answers. One account per person." oninput="updateHomepageMeta()"></textarea>
+                        </div>
+                        <div class="homepage-block">
+                            <label class="field-label">Prizes — Title</label>
+                            <input class="field-input" id="hpPrizesTitle" maxlength="200" placeholder="Prizes" oninput="updateHomepageMeta()">
+                            <label class="field-label" style="margin-top:8px;">Prizes — Body</label>
+                            <textarea class="field-input homepage-body" id="hpPrizesBody" maxlength="8000" rows="3" placeholder="Top three on the leaderboard win swag." oninput="updateHomepageMeta()"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="resizer-v" id="resizerV3"></div>
+
+                <div class="output-container" id="homepageOutputPane">
+                    <div class="pane-toolbar" style="min-height:30px; padding:2px 10px; justify-content:space-between;">
+                        <span style="font-size:0.7rem; color:#aaa;">OUTPUT: homepage.conf</span>
+                        <button class="mini-btn" onclick="copyToClipboard('homepage')">Copy</button>
+                    </div>
+                    <textarea class="output" id="homepageOutput" readonly></textarea>
+                </div>
             </div>
         </div>
     </div>
